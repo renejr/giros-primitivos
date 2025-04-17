@@ -29,9 +29,22 @@ export default class GameScene extends Phaser.Scene {
         this.reelSpacing = 10;
         // Calcula o offset baseado nas propriedades da classe
         this.reelStartYOffset = -(this.visibleRows - 1) / 2 * (this.symbolHeight + this.symbolPaddingY);
-        // --- FIM DAS DEFINIÇÕES NO CONSTRUCTOR ---
 
-        // --- FIM DA ADIÇÃO ---
+        // --- ADICIONADO: Definir as tiras de símbolos ---
+        this.reelSymbolStrips = [];
+        const baseStrip = [...this.symbolKeys]; // Copia a lista base
+
+        for (let i = 0; i < this.numReels; i++) {
+            // Cria uma tira longa embaralhando e repetindo a base
+            // Exemplo: 3 repetições = 3 * 12 = 36 símbolos por tira (ajuste!)
+            let strip = [];
+            for(let k=0; k < 3; k++) {
+                 strip = strip.concat(Phaser.Utils.Array.Shuffle([...baseStrip]));
+            }
+            this.reelSymbolStrips[i] = strip;
+        }
+        console.log("Reel strips defined:", this.reelSymbolStrips);
+        // --- FIM DAS DEFINIÇÕES NO CONSTRUCTOR ---
     }
 
     preload() {
@@ -78,154 +91,169 @@ export default class GameScene extends Phaser.Scene {
 
     createReels() {
         console.log('GameScene: createReels() called');
-    
-        // --- Constantes de Layout (Ajuste conforme necessário) ---
-        // const SYMBOL_WIDTH = 150;  // Largura estimada de cada símbolo
-        // const SYMBOL_HEIGHT = 150; // Altura estimada de cada símbolo
-        // const SYMBOL_PADDING_Y = 15; // Espaço vertical entre os símbolos
-        // const VISIBLE_ROWS = 3;    // Quantas linhas são visíveis
-        // const NUM_REELS = 5;       // Quantas colunas
-        // const REEL_SPACING = 10;   // Espaço horizontal entre as colunas
-        // // Offset para centralizar verticalmente (AGORA CONSIDERA O PADDING)
-        // const REEL_START_Y_OFFSET = -(VISIBLE_ROWS - 1) / 2 * (SYMBOL_HEIGHT + SYMBOL_PADDING_Y); // <<< MODIFICADO
-        // const REEL_START_Y_OFFSET = -(VISIBLE_ROWS - 1) / 2 * SYMBOL_HEIGHT; // Offset para centralizar verticalmente
-
-    
-        // Largura total ocupada pelas colunas e espaços
-        // Cálculos que dependem das propriedades da classe
+        // --- Constantes e Cálculos de Posição X (como antes) ---
         const totalReelsWidth = (this.numReels * this.symbolWidth) + ((this.numReels - 1) * this.reelSpacing);
         const firstReelX = this.cameras.main.centerX - (totalReelsWidth / 2) + (this.symbolWidth / 2) - 75; // Seu ajuste horizontal
         const reelsCenterY = this.cameras.main.centerY - 75; // Seu ajuste vertical final
-    
-        // Limpa o array de reels anterior, se houver
+
         this.reels = [];
-        this.visibleSymbols = []; // Limpa/inicializa antes de preencher
-    
-        // Cria cada coluna (reel)
-        for (let i = 0; i < this.numReels; i++) { // Usa this.numReels
+        // this.visibleSymbols = []; // Não vamos mais popular isso diretamente aqui
+
+        for (let i = 0; i < this.numReels; i++) {
             const reelX = firstReelX + i * (this.symbolWidth + this.reelSpacing);
-            this.visibleSymbols[i] = [];
-            const reelContainer = this.add.container(reelX, reelsCenterY);
+            const reelContainer = this.add.container(reelX, reelsCenterY); // Container ainda centrado
             this.reels.push(reelContainer);
             console.log(`Container for Reel ${i+1} created at X: ${reelX}`);
 
-            for (let j = 0; j < this.visibleRows; j++) { // Usa this.visibleRows
-                const randomSymbolKey = Phaser.Math.RND.pick(this.symbolKeys);
-                // Usa this.reelStartYOffset, this.symbolHeight, this.symbolPaddingY
-                const symbolY = this.reelStartYOffset + j * (this.symbolHeight + this.symbolPaddingY);
+            const currentStrip = this.reelSymbolStrips[i]; // Pega a tira para esta coluna
+            const stripHeight = currentStrip.length * (this.symbolHeight + this.symbolPaddingY);
 
-                const cellBg = this.add.rectangle(
-                    0, symbolY,
-                    this.symbolWidth, this.symbolHeight + this.symbolPaddingY, // Usa this.
-                    0x000000, 0.2
-                ).setOrigin(0.5);
+            // Adiciona TODOS os símbolos da tira ao container
+            for (let k = 0; k < currentStrip.length; k++) {
+                const symbolKey = currentStrip[k];
+                // Calcula a posição Y relativa ao *topo* da tira imaginária
+                // A posição 0 seria o topo do primeiro símbolo
+                const symbolY = k * (this.symbolHeight + this.symbolPaddingY);
+
+                // Adiciona fundo da célula (opcional, pode remover se a máscara bastar)
+                const cellBg = this.add.rectangle(0, symbolY, this.symbolWidth, this.symbolHeight + this.symbolPaddingY, 0x000000, 0.1).setOrigin(0.5); // Alpha menor
                 reelContainer.add(cellBg);
 
-                const symbolImage = this.add.image(0, symbolY, randomSymbolKey)
-                    .setOrigin(0.5); // Garante origem
+                // Cria e adiciona a imagem do símbolo
+                const symbolImage = this.add.image(0, symbolY, symbolKey).setOrigin(0.5);
                 reelContainer.add(symbolImage);
-                this.visibleSymbols[i][j] = symbolImage;
+
+                // Não precisamos mais guardar visibleSymbols aqui da mesma forma
             }
-        }
-        console.log('Finished creating initial reels display and storing symbol references.');
 
-        // --- CORRIGIDO: Criar e Aplicar Máscara usando this. ---
+            // --- AJUSTE INICIAL DA POSIÇÃO Y DO CONTAINER ---
+            // Para começar mostrando os símbolos do "meio" da tira na área visível
+            // Vamos calcular o Y do símbolo do meio da tira e ajustar o container
+            // para que esse Y fique no centro (reelsCenterY, que é a origem Y do container)
+            const middleSymbolIndex = Math.floor(currentStrip.length / 2);
+            const middleSymbolY = middleSymbolIndex * (this.symbolHeight + this.symbolPaddingY);
+            // Ajusta a posição inicial Y do container. O container em si é movido.
+            // A origem Y do container (reelContainer.y) foi definida como reelsCenterY.
+            // Os símbolos são adicionados com Y relativo a 0 dentro do container.
+            // Para centralizar o símbolo do meio da *tira* no centro da *tela*,
+            // precisamos deslocar o *conteúdo* do container para cima por middleSymbolY.
+            // Como não podemos mover o conteúdo diretamente, ajustamos a origem Y inicial
+            // ou aplicamos uma posição inicial que simule isso.
+            // Uma forma é definir a posição Y inicial do *container* para esconder parte da tira.
+            // Vamos posicionar o *topo* do container (y=0 interno) um pouco acima da área visível.
+            // A área visível começa em roughly reelsCenterY + reelStartYOffset - symbolHeight/2
+            // Ajuste inicial Y do container (pode precisar de ajuste fino)
+            reelContainer.y = reelsCenterY - middleSymbolY; // Tentativa inicial de centralizar o meio da tira
+
+        } // Fim do loop i
+
+        // --- Código da Máscara (como antes, mas verifique as coordenadas) ---
         console.log('Creating reels mask...');
-        // Calcula a área total ocupada visualmente pelos reels visíveis
-        // *** USA this. para acessar as propriedades da classe ***
-        const maskWidth = totalReelsWidth - this.reelSpacing;
+        // Recalcular maskWidth/Height/X/Y baseado nas propriedades `this.`
+        const maskWidth = (this.numReels * this.symbolWidth) + ((this.numReels - 1) * this.reelSpacing) - this.reelSpacing; // Ajustado
         const maskHeight = this.visibleRows * (this.symbolHeight + this.symbolPaddingY) - this.symbolPaddingY;
-
-        // Calcula a posição inicial da máscara (canto superior esquerdo da área dos reels)
-        // *** USA this. para acessar as propriedades da classe ***
         const maskX = firstReelX - this.symbolWidth / 2;
-        const maskY = reelsCenterY + this.reelStartYOffset - this.symbolHeight / 2;
+        // O Y da máscara deve ser o topo da área visível
+        const maskY = reelsCenterY + this.reelStartYOffset - this.symbolHeight / 2; // Topo da linha 0
 
-        // Cria um objeto Graphics para desenhar a forma da máscara
         const maskGraphics = this.make.graphics();
-        maskGraphics.fillStyle(0xffffff); // Cor não importa
-        maskGraphics.beginPath();
-        maskGraphics.fillRect(
-            maskX,
-            maskY,
-            maskWidth,
-            maskHeight
-        );
-
-        // Cria a GeometryMask a partir da forma desenhada
+        maskGraphics.fillStyle(0xffffff);
+        maskGraphics.fillRect(maskX, maskY, maskWidth, maskHeight);
         const mask = maskGraphics.createGeometryMask();
 
-        // Aplica a máscara a CADA container de reel
-         // *** USA this. para acessar as propriedades da classe ***
         for (let i = 0; i < this.numReels; i++) {
-            // Aplica ao container correto guardado em this.reels
-            if(this.reels[i]) { // Adiciona verificação se o reel existe
-               this.reels[i].setMask(mask);
+            if (this.reels[i]) {
+                this.reels[i].setMask(mask);
             }
         }
         console.log('Reels mask created and applied.');
-        // --- FIM DA CORREÇÃO ---
+        console.log('Finished creating initial reels display with full strips.');
     }
-    // --- FIM DA SUBSTITUIÇÃO ---
+    // ... startSpin e displaySpinResult precisam ser modificados ...
     
     // ... (create, startSpin, update como antes ou com modificações futuras) ...
 
     // --- NOVO MÉTODO: Iniciar o Giro (Stub) ---
+    // SUBSTITUA O MÉTODO startSpin INTEIRO POR ESTE:
     startSpin() {
         console.log('--- GameScene: startSpin() called! ---');
-    
-        // TODO: Adicionar lógica de custo da aposta e verificação de saldo aqui
-        // let currentBet = this.registry.get('currentBet'); // Exemplo
-        // let balance = this.registry.get('balance');
-        // if (balance < currentBet) { console.log("Saldo insuficiente!"); return; }
-        // balance -= currentBet;
-        // this.registry.set('balance', balance);
-        // Chamar IPC para atualizar saldo no DB...
-    
-        // TODO: Desabilitar botão de Spin na UIScene
-        // const uiScene = this.scene.get('UIScene');
-        // if (uiScene) uiScene.disableSpinButton();
-    
-        // 1. Gerar o resultado final aleatório (3 símbolos para cada coluna)
-        let finalResult = [];
-        for (let i = 0; i < this.numReels; i++) { // <<<<<<<<<<<<<<<<<<< USA this.numReels
-            finalResult[i] = [];
-            for (let j = 0; j < this.visibleRows; j++) { // <<<<<<<<<<<<<<<< USA this.visibleRows
-                finalResult[i][j] = Phaser.Math.RND.pick(this.symbolKeys);
-            }
-        }
-        console.log('Random spin result determined:', finalResult);
-    
-        // 2. Exibir o resultado (por enquanto, sem animação, apenas "troca" as imagens)
-        this.displaySpinResult(finalResult);
-    
-        // TODO: Implementar animação de giro aqui antes de chamar displaySpinResult
-    
-        // TODO: Após a parada (e animação), verificar vitórias
-        // this.checkWins(finalResult);
-    
-        // TODO: Reabilitar o botão de Spin na UIScene (após tudo terminar)
-        // if (uiScene) uiScene.enableSpinButton();
-    }
 
-    // --- NOVO MÉTODO: Exibe o resultado final nos símbolos visíveis ---
-    displaySpinResult(result) {
-        console.log('GameScene: displaySpinResult() called');
-         // --- USA AS PROPRIEDADES DA CLASSE (this.) ---
-        for (let i = 0; i < this.numReels; i++) { // <<<<<<<<<<<<<<<<<<< USA this.numReels
-            for (let j = 0; j < this.visibleRows; j++) { // <<<<<<<<<<<<<<<< USA this.visibleRows
-                const symbolImage = this.visibleSymbols[i][j];
-                const resultKey = result[i][j];
-                if (symbolImage && resultKey) {
-                    symbolImage.setTexture(resultKey);
-                } else {
-                    console.error(`Error setting texture for Reel ${i} Row ${j}`);
-                }
-            }
+        const reelsCenterY = this.cameras.main.centerY - 75;
+
+        // TODO: Lógica de custo da aposta e verificação de saldo...
+        // TODO: Desabilitar botão de Spin na UIScene...
+
+        // 1. Gerar o resultado final: um ÍNDICE de parada para cada coluna
+        let finalStopIndexes = [];
+        for (let i = 0; i < this.numReels; i++) {
+            // Escolhe um índice aleatório dentro da tira de símbolos para esta coluna
+            // Evita escolher os primeríssimos ou últimíssimos para ter margem para "girar"
+            const buffer = this.visibleRows; // Quantos símbolos deixar de margem no início/fim
+            finalStopIndexes[i] = Phaser.Math.RND.between(buffer, this.reelSymbolStrips[i].length - 1 - buffer);
         }
-        console.log('Finished displaying spin result.');
+        console.log('Random stop indexes determined:', finalStopIndexes);
+
+        // --- REMOVIDA A CHAMADA PARA displaySpinResult ---
+        // this.displaySpinResult(finalResult); // <<< REMOVIDO
+
+        const spinDurationBase = 2500; // Ex: 2.5 segundos base (ajuste!)
+        const reelDelay = 300;        // Atraso maior entre paradas (ajuste!)       // Atraso entre o início do giro de cada coluna
+
+        console.log('Starting tween animations...');
+        for (let i = 0; i < this.numReels; i++) {
+            const targetStopIndex = finalStopIndexes[i];
+            const reelContainer = this.reels[i];
+            const stepY = this.symbolHeight + this.symbolPaddingY;
+            const targetSymbolInternalY = targetStopIndex * stepY;
+            
+            // O centro visual da grade corresponde à linha do meio (j=1)
+            // A posição Y interna da linha do meio é: this.reelStartYOffset + 1 * stepY
+            const middleRowInternalY = this.reelStartYOffset + Math.floor(this.visibleRows / 2) * stepY;
+            // A posição final do container é sua posição central menos o deslocamento
+            // necessário para alinhar o targetSymbolInternalY com o middleRowInternalY.
+            // Posição Y final REAL onde o container deve parar
+            const finalContainerY = reelsCenterY - (targetStopIndex * stepY);
+
+            // --- Melhoria da Animação ---
+            // const revolutions = 2; // Nº de "voltas" extras para simular velocidade (ajuste!)
+            // const stripPixelHeight = this.reelSymbolStrips[i].length * stepY; // Altura total da tira de símbolos
+            // Faz o tween ir muito além da posição final (mais para cima = Y negativo maior)
+            // const targetYTween = finalContainerY - (revolutions * stripPixelHeight);
+            // Aumenta a duração base e adiciona mais tempo por revolução extra
+            const tweenDuration = spinDurationBase + i * reelDelay
+            // --- Fim da Melhoria ---
+
+            console.log(`Reel <span class="math-inline">\{i\+1\}\: Animating to Y\=</span>{targetYTween.toFixed(2)}, Final Y will be ${finalContainerY.toFixed(2)}`);
+
+            // --- Cria a Animação (Tween) ---
+            this.tweens.add({
+                targets: reelContainer,
+                y: finalContainerY,     // Continua mirando na posição final correta
+                duration: tweenDuration, // <<< DURAÇÃO MAIOR
+                // Escolha uma função de Easing que desacelere no final:
+                // 'Expo.easeOut' - Desaceleração exponencial forte (bom para paradas)
+                // 'Circ.easeOut' - Desaceleração circular
+                // 'Back.easeOut' - Desacelera e dá um leve "overshoot" (passa um pouco e volta) - interessante!
+                // 'Bounce.easeOut' - Efeito de "quicar" na parada
+                // Experimente! Vamos começar com Expo.easeOut:
+                ease: 'Expo.easeOut', // <<< MUDAR O EASE
+                // easeParams: [ 1.5 ], // Parâmetro opcional para 'Back.easeOut' (intensidade do overshoot)
+                delay: i * 100, // Atraso inicial um pouco maior (opcional)
+                onComplete: () => {
+                    // Mantém o log, não precisamos mais do "snap" se o tween parar corretamente
+                    console.log(`Reel <span class="math-inline">\{i \+ 1\} stopped at Y\=</span>{reelContainer.y.toFixed(2)} (Target index: ${targetStopIndex})`);
+        
+                    if (i === this.numReels - 1) {
+                        console.log('--- All reels stopped! ---');
+                        // TODO: checkWins, enable button...
+                    }
+                }
+            });
+        }
+        // --- FIM DA ANIMAÇÃO ---
+
+        // TODO Lógica futura...
     }
-    // --- FIM DO NOVO MÉTODO ---
 
     update(time, delta) {
         // O loop de jogo principal (executa a cada frame)
