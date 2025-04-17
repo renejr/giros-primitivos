@@ -173,86 +173,74 @@ export default class GameScene extends Phaser.Scene {
     
     // ... (create, startSpin, update como antes ou com modificações futuras) ...
 
-    // --- NOVO MÉTODO: Iniciar o Giro (Stub) ---
     // SUBSTITUA O MÉTODO startSpin INTEIRO POR ESTE:
     startSpin() {
         console.log('--- GameScene: startSpin() called! ---');
-
+        // Use o offset Y final que você definiu em createReels (ex: -75)
         const reelsCenterY = this.cameras.main.centerY - 75;
 
         // TODO: Lógica de custo da aposta e verificação de saldo...
         // TODO: Desabilitar botão de Spin na UIScene...
 
-        // 1. Gerar o resultado final: um ÍNDICE de parada para cada coluna
+        // 1. Gerar os índices de parada finais aleatórios
         let finalStopIndexes = [];
         for (let i = 0; i < this.numReels; i++) {
-            // Escolhe um índice aleatório dentro da tira de símbolos para esta coluna
-            // Evita escolher os primeríssimos ou últimíssimos para ter margem para "girar"
-            const buffer = this.visibleRows; // Quantos símbolos deixar de margem no início/fim
-            finalStopIndexes[i] = Phaser.Math.RND.between(buffer, this.reelSymbolStrips[i].length - 1 - buffer);
+            const buffer = this.visibleRows;
+            const stripLength = this.reelSymbolStrips[i].length;
+            finalStopIndexes[i] = Phaser.Math.RND.between(buffer, stripLength - 1 - buffer);
         }
         console.log('Random stop indexes determined:', finalStopIndexes);
 
-        // --- REMOVIDA A CHAMADA PARA displaySpinResult ---
-        // this.displaySpinResult(finalResult); // <<< REMOVIDO
+        // 2. Configurações da Animação de PARADA
+        const stopDurationBase = 960;  // Duração da animação de DESACELERAÇÃO (ajuste!)
+        const reelDelay = 180;        // Atraso entre as paradas das colunas
+        const startOffsetSymbols = 15; // Quantos símbolos "acima" do ponto final a animação vai começar (simula vindo de um giro)
+        const stepY = this.symbolHeight + this.symbolPaddingY;
 
-        const spinDurationBase = 2500; // Ex: 2.5 segundos base (ajuste!)
-        const reelDelay = 300;        // Atraso maior entre paradas (ajuste!)       // Atraso entre o início do giro de cada coluna
-
-        console.log('Starting tween animations...');
+        console.log('Starting stopping tweens...');
         for (let i = 0; i < this.numReels; i++) {
             const targetStopIndex = finalStopIndexes[i];
             const reelContainer = this.reels[i];
-            const stepY = this.symbolHeight + this.symbolPaddingY;
-            const targetSymbolInternalY = targetStopIndex * stepY;
-            
-            // O centro visual da grade corresponde à linha do meio (j=1)
-            // A posição Y interna da linha do meio é: this.reelStartYOffset + 1 * stepY
-            const middleRowInternalY = this.reelStartYOffset + Math.floor(this.visibleRows / 2) * stepY;
-            // A posição final do container é sua posição central menos o deslocamento
-            // necessário para alinhar o targetSymbolInternalY com o middleRowInternalY.
+
+            if (!reelContainer) {
+                console.error(`Error: Invalid reel container for reel ${i}`);
+                continue;
+            }
+
             // Posição Y final REAL onde o container deve parar
             const finalContainerY = reelsCenterY - (targetStopIndex * stepY);
 
-            // --- Melhoria da Animação ---
-            // const revolutions = 2; // Nº de "voltas" extras para simular velocidade (ajuste!)
-            // const stripPixelHeight = this.reelSymbolStrips[i].length * stepY; // Altura total da tira de símbolos
-            // Faz o tween ir muito além da posição final (mais para cima = Y negativo maior)
-            // const targetYTween = finalContainerY - (revolutions * stripPixelHeight);
-            // Aumenta a duração base e adiciona mais tempo por revolução extra
-            const tweenDuration = spinDurationBase + i * reelDelay
-            // --- Fim da Melhoria ---
+            // Calcula a posição Y inicial para a animação de parada
+            const startTweenY = finalContainerY - (startOffsetSymbols * stepY);
 
-            console.log(`Reel <span class="math-inline">\{i\+1\}\: Animating to Y\=</span>{targetYTween.toFixed(2)}, Final Y will be ${finalContainerY.toFixed(2)}`);
+            // --- Define a Posição Inicial INSTANTANEAMENTE ---
+            reelContainer.y = startTweenY;
+            // --------------------------------------------------
 
-            // --- Cria a Animação (Tween) ---
+            // Duração da animação de parada
+            const tweenDuration = stopDurationBase + i * reelDelay;
+
+            console.log(`Reel <span class="math-inline">\{i\+1\}\: Setting start Y\=</span>{startTweenY.toFixed(2)}, tweening to Final Y=${finalContainerY.toFixed(2)} (Index: ${targetStopIndex})`);
+
+            // --- Cria a Animação (Tween) de Parada ---
             this.tweens.add({
                 targets: reelContainer,
-                y: finalContainerY,     // Continua mirando na posição final correta
-                duration: tweenDuration, // <<< DURAÇÃO MAIOR
-                // Escolha uma função de Easing que desacelere no final:
-                // 'Expo.easeOut' - Desaceleração exponencial forte (bom para paradas)
-                // 'Circ.easeOut' - Desaceleração circular
-                // 'Back.easeOut' - Desacelera e dá um leve "overshoot" (passa um pouco e volta) - interessante!
-                // 'Bounce.easeOut' - Efeito de "quicar" na parada
-                // Experimente! Vamos começar com Expo.easeOut:
-                ease: 'Expo.easeOut', // <<< MUDAR O EASE
-                // easeParams: [ 1.5 ], // Parâmetro opcional para 'Back.easeOut' (intensidade do overshoot)
-                delay: i * 100, // Atraso inicial um pouco maior (opcional)
+                y: finalContainerY,         // Anima PARA a posição final correta
+                duration: tweenDuration,
+                ease: 'Expo.easeOut',       // Easing de desaceleração forte (experimente 'Back.easeOut', 'Circ.easeOut')
+                delay: i * 100,             // Atraso para iniciar a animação de parada
                 onComplete: () => {
-                    // Mantém o log, não precisamos mais do "snap" se o tween parar corretamente
+                    // Log final - não precisa mais de snap
                     console.log(`Reel <span class="math-inline">\{i \+ 1\} stopped at Y\=</span>{reelContainer.y.toFixed(2)} (Target index: ${targetStopIndex})`);
-        
+
                     if (i === this.numReels - 1) {
                         console.log('--- All reels stopped! ---');
                         // TODO: checkWins, enable button...
                     }
-                }
+                },
+                onCompleteScope: this
             });
-        }
-        // --- FIM DA ANIMAÇÃO ---
-
-        // TODO Lógica futura...
+        } // Fim do loop for
     }
 
     update(time, delta) {
