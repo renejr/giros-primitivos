@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giros Primitivos</title>
+    <style>
+        /* Estilos básicos para garantir que o canvas do Phaser preencha a janela */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Evita barras de rolagem indesejadas */
+            background-color: #000; /* Fundo preto como padrão */
+        }
+        /* O Phaser geralmente cria o canvas, mas podemos garantir que ele se comporte bem */
+        canvas {
+            display: block; /* Remove espaço extra abaixo do canvas */
+        }
+    </style>
+</head>
+<body>
+    <script>console.log("index.html: Body script executing...");</script>
+
+    <canvas id="game-canvas"></canvas> <script src="./node_modules/phaser/dist/phaser.min.js"></script>
+
+    <script type="module" src="./src/game.js"></script>
+    </body>
+</html>

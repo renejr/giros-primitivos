@@ -1,0 +1,27 @@
+{
+  "name": "giros-primitivos",
+  "version": "1.0.0",
+  "description": "Jogo de slot machine pré-histórico com Phaser 3 e Electron",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "phaser",
+    "phaser3",
+    "electron",
+    "game",
+    "slot-machine",
+    "prehistoric"
+  ],
+  "author": "Rene Ballesteros Machado Junior",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^35.1.5"
+  },
+  "dependencies": {
+    "phaser": "^3.88.2",
+    "python-shell": "^5.0.0"
+  }
+}
