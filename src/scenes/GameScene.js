@@ -3,6 +3,8 @@
 // Não precisamos importar Phaser aqui se ele já está global
 // import Phaser from 'phaser';
 
+import { PAYLINES, PAYTABLE, NUM_REELS as GameConstants_NUM_REELS, VISIBLE_ROWS as GameConstants_VISIBLE_ROWS } from '../helpers/Constants.js'; // <<< IMPORTAR
+
 export default class GameScene extends Phaser.Scene {
 
     constructor() {
@@ -173,7 +175,47 @@ export default class GameScene extends Phaser.Scene {
     
     // ... (create, startSpin, update como antes ou com modificações futuras) ...
 
-    // SUBSTITUA O MÉTODO startSpin INTEIRO POR ESTE:
+    // --- NOVO MÉTODO: Verificar Ganhos (Stub) ---
+    checkWins(finalStopIndexes) { // <<< MUDE O NOME DO PARÂMETRO AQUI
+        console.log('--- GameScene: checkWins() called ---');
+        // finalStopIndexes[coluna] conterá o índice final da coluna
+
+        // Exemplo de como construir a grade visível a partir dos índices
+        let visibleSymbolGrid = [];
+        for (let i = 0; i < this.numReels; i++) {
+            visibleSymbolGrid[i] = [];
+            // Agora 'finalStopIndexes' existe e pode ser usado corretamente:
+            const stopIndex = finalStopIndexes[i];
+            const strip = this.reelSymbolStrips[i];
+
+            // Verifica se strip e stopIndex são válidos antes de acessar
+            if (!strip || stopIndex === undefined || stopIndex < 0 || stopIndex >= strip.length) {
+                console.error(`Invalid stopIndex (${stopIndex}) or strip for reel ${i}`);
+                // Preenche com null ou algum placeholder em caso de erro
+                visibleSymbolGrid[i] = [null, null, null];
+                continue; // Pula para a próxima coluna
+            }
+
+            const indexRow0 = (stopIndex - 1 + strip.length) % strip.length;
+            const indexRow1 = stopIndex;
+            const indexRow2 = (stopIndex + 1) % strip.length;
+
+            visibleSymbolGrid[i][0] = strip[indexRow0];
+            visibleSymbolGrid[i][1] = strip[indexRow1];
+            visibleSymbolGrid[i][2] = strip[indexRow2];
+        }
+        console.log('Visible Grid for Win Check:', visibleSymbolGrid);
+
+        // ... (Restante do código de checkWins como antes) ...
+
+        let totalWin = 0;
+        console.log(`Total Win Calculated: ${totalWin}`);
+        return totalWin;
+    }
+    // --- FIM DO NOVO MÉTODO ---
+
+    // --- NOVO MÉTODO: Exibir Resultado do Spin (Stub) ---
+
     startSpin() {
         console.log('--- GameScene: startSpin() called! ---');
         // Use o offset Y final que você definiu em createReels (ex: -75)
@@ -196,6 +238,9 @@ export default class GameScene extends Phaser.Scene {
         const reelDelay = 180;        // Atraso entre as paradas das colunas
         const startOffsetSymbols = 15; // Quantos símbolos "acima" do ponto final a animação vai começar (simula vindo de um giro)
         const stepY = this.symbolHeight + this.symbolPaddingY;
+
+        // Copie os índices finais para usar no onComplete
+        const finalStopIndexesCopy = [...finalStopIndexes]; // Copia para evitar problemas de closure/timing
 
         console.log('Starting stopping tweens...');
         for (let i = 0; i < this.numReels; i++) {
@@ -235,7 +280,11 @@ export default class GameScene extends Phaser.Scene {
 
                     if (i === this.numReels - 1) {
                         console.log('--- All reels stopped! ---');
-                        // TODO: checkWins, enable button...
+                        // --- CHAMADA PARA checkWins ---
+                        this.checkWins(finalStopIndexesCopy); // Passa os índices finais
+                        // --- FIM DA CHAMADA ---
+        
+                        // TODO: Reabilitar o botão de Spin na UIScene
                     }
                 },
                 onCompleteScope: this
