@@ -100,6 +100,10 @@ export default class PreloaderScene extends Phaser.Scene {
         // this.load.image('logo', 'assets/images/ui/logo.png');
         this.load.image('background', 'assets/images/backgrounds/bg_jungle.jpg');
         this.load.image('spinButton', 'assets/images/ui/button_spin.png');
+
+        // Em PreloaderScene.preload()
+        this.load.image('betPlusButton', 'assets/images/ui/button_plus.png');
+        this.load.image('betMinusButton', 'assets/images/ui/button_minus.png');
         
         // --- Carregar Símbolos ---
         console.log('Loading symbols...');

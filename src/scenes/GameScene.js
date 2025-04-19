@@ -172,13 +172,13 @@ export default class GameScene extends Phaser.Scene {
         console.log('Finished creating initial reels display with full strips.');
     }
     
-    // SUBSTITUA O MÉTODO checkWins INTEIRO POR ESTE:
+// SUBSTITUA O MÉTODO checkWins INTEIRO POR ESTE:
     checkWins(finalStopIndexes) {
         console.log('--- GameScene: checkWins() called ---');
         const wildSymbolKey = 'symbol_wild'; // Chave do Wild definida em Constants.js
-        // const scatterSymbolKey = 'symbol_scatter'; // Chave do Scatter
+        // const scatterSymbolKey = 'symbol_scatter'; // Chave do Scatter (para TODO futuro)
 
-        // 1. Construir a grade 5x3 visível (como antes)
+        // 1. Construir a grade 5x3 visível a partir dos índices de parada
         let visibleSymbolGrid = [];
         for (let i = 0; i < this.numReels; i++) {
             visibleSymbolGrid[i] = [];
@@ -189,74 +189,78 @@ export default class GameScene extends Phaser.Scene {
                 visibleSymbolGrid[i] = [null, null, null];
                 continue;
             }
-            const indexRow0 = (stopIndex - 1 + strip.length) % strip.length;
-            const indexRow1 = stopIndex;
-            const indexRow2 = (stopIndex + 1) % strip.length;
+            const indexRow0 = (stopIndex - 1 + strip.length) % strip.length; // Topo
+            const indexRow1 = stopIndex;                                   // Meio
+            const indexRow2 = (stopIndex + 1) % strip.length;              // Base
             visibleSymbolGrid[i][0] = strip[indexRow0];
             visibleSymbolGrid[i][1] = strip[indexRow1];
             visibleSymbolGrid[i][2] = strip[indexRow2];
         }
-        console.log('Visible Grid for Win Check:\n',
-            `[${visibleSymbolGrid[0].join(',')}]\n`,
-            `[${visibleSymbolGrid[1].join(',')}]\n`,
-            `[${visibleSymbolGrid[2].join(',')}]\n`,
-            `[${visibleSymbolGrid[3].join(',')}]\n`,
-            `[${visibleSymbolGrid[4].join(',')}]`);
+        // Log formatado para melhor visualização da grade
+        console.log('Visible Grid for Win Check:');
+        for (let r = 0; r < this.visibleRows; r++) {
+            let rowStr = "";
+            for (let c = 0; c < this.numReels; c++) {
+                rowStr += (visibleSymbolGrid[c][r] || 'NULL').padEnd(20); // Ajuste padEnd conforme necessário
+            }
+            console.log(`[${rowStr}]`);
+        }
+
 
         // 2. Inicializar ganhos
         let totalWin = 0;
-        let winningLinesInfo = []; // Para guardar detalhes
-
-        // --- LÓGICA PRINCIPAL DE VERIFICAÇÃO ---
+        let winningLinesInfo = [];
 
         // 3. Iterar sobre cada PAYLINE
         for (let lineIndex = 0; lineIndex < PAYLINES.length; lineIndex++) {
-            const currentPayline = PAYLINES[lineIndex]; // Pega definição da linha (ex: [1,1,1,1,1])
-            let lineSymbols = []; // Símbolos nesta linha específica
+            const currentPayline = PAYLINES[lineIndex];
+            let lineSymbols = [];
 
             // Coleta os símbolos da payline atual
             for (let reelIndex = 0; reelIndex < this.numReels; reelIndex++) {
-                const rowIndex = currentPayline[reelIndex];
-                lineSymbols.push(visibleSymbolGrid[reelIndex][rowIndex]);
+                // Garante que não tentemos acessar fora dos limites da payline definida
+                if(reelIndex < currentPayline.length){
+                    const rowIndex = currentPayline[reelIndex];
+                    lineSymbols.push(visibleSymbolGrid[reelIndex][rowIndex]);
+                } else {
+                    lineSymbols.push(null); // Preenche com null se payline for mais curta
+                }
             }
 
             // 4. Verifica combinações da esquerda para a direita
             let firstSymbol = lineSymbols[0];
-            let paySymbol = firstSymbol; // Símbolo que definirá o pagamento
+            if (firstSymbol === null) continue; // Pula linha se começar com erro/null
+
+            let paySymbol = firstSymbol;
             let matchCount = 0;
 
-            // Ignora se a linha começar com null (erro na construção da grade)
-            if (firstSymbol === null) continue;
-
-            // Lógica para Wild no início: define paySymbol como o primeiro NÃO-WILD
+            // Lógica para Wild no início
             if (firstSymbol === wildSymbolKey) {
-                matchCount = 1; // O primeiro Wild já conta como 1
-                for (let k = 1; k < lineSymbols.length; k++) {
+                matchCount = 1;
+                for (let k = 1; k < this.numReels; k++) { // Usa this.numReels aqui
+                    if(lineSymbols[k] === null) break; // Para se a linha acabar
                     if (lineSymbols[k] !== wildSymbolKey) {
-                        paySymbol = lineSymbols[k]; // Encontrou o símbolo base
+                        paySymbol = lineSymbols[k];
                         break;
                     }
-                    matchCount++; // Conta Wilds consecutivos
+                    matchCount++;
                 }
-                // Se a linha inteira for de Wilds, paySymbol permanece wildSymbolKey
-                // (Verifique se 'symbol_wild' tem entrada na PAYTABLE nesse caso)
+                // Se linha inteira de Wilds, paySymbol = wildSymbolKey
+                if (matchCount === this.numReels) paySymbol = wildSymbolKey;
             } else {
-                paySymbol = firstSymbol; // O primeiro símbolo é a base
+                paySymbol = firstSymbol;
             }
 
-            // Se o símbolo base não paga (não está na PAYTABLE, exceto talvez o Wild), pula linha
-            if (!PAYTABLE[paySymbol]) {
-                // console.log(`Payline ${lineIndex + 1}: Symbol ${paySymbol} has no payout defined.`);
+            // Pula linha se o símbolo base não paga (ou é Scatter, tratar depois)
+            if (!PAYTABLE[paySymbol] /* && paySymbol !== scatterSymbolKey */) {
                 continue;
             }
 
-            // Se não começou com Wild, o primeiro símbolo já conta como 1 match se for válido
-            if (firstSymbol !== wildSymbolKey) {
-                matchCount = 1;
-            }
+            // Reseta matchCount e conta de novo incluindo o símbolo base correto
+            matchCount = 0;
+            for (let i = 0; i < this.numReels; i++) {
+                if (lineSymbols[i] === null) break; // Para se a linha acabar
 
-            // Continua a contagem a partir do segundo símbolo (ou do primeiro não-wild)
-            for (let i = matchCount; i < lineSymbols.length; i++) {
                 if (lineSymbols[i] === paySymbol || lineSymbols[i] === wildSymbolKey) {
                     matchCount++;
                 } else {
@@ -264,136 +268,144 @@ export default class GameScene extends Phaser.Scene {
                 }
             }
 
-            // 5. Calcula o ganho se houver 3 ou mais correspondências
+            // 5. Calcula o ganho se houver 3 ou mais
             if (matchCount >= 3) {
-                // PAYTABLE geralmente tem [pagamento_para_3, pagamento_para_4, pagamento_para_5]
-                // O índice é matchCount - 3
-                const payoutIndex = matchCount - 3;
+                const payoutIndex = matchCount - 3; // Índice para array [3, 4, 5]
                 const payoutMultiplier = (PAYTABLE[paySymbol] && PAYTABLE[paySymbol].length > payoutIndex)
                                         ? PAYTABLE[paySymbol][payoutIndex]
-                                        : 0; // Retorna 0 se não houver entrada
+                                        : 0;
 
                 if (payoutMultiplier > 0) {
-                    // --- IMPORTANTE: Cálculo do Ganho Real ---
-                    // Por enquanto, estamos apenas somando os multiplicadores.
-                    // O ideal é multiplicar pela aposta POR LINHA.
-                    // Precisamos obter o valor da aposta aqui.
-                    // Vamos usar um valor fixo de 1 por enquanto como placeholder.
-                    const betPerLine = 1; // <<< PLACEHOLDER - PRECISA SER DEFINIDO CORRETAMENTE
+                    // USA VALOR PLACEHOLDER PARA APOSTA POR LINHA!
+                    const betPerLine = 1; // <<< PRECISA SER SUBSTITUÍDO PELA APOSTA REAL
                     const lineWin = payoutMultiplier * betPerLine;
-                    // --- FIM IMPORTANTE ---
 
                     totalWin += lineWin;
-                    console.log(`%cWIN!%c Payline ${lineIndex + 1}, Symbol: ${paySymbol}, Count: ${matchCount}, Payout: ${lineWin} (Multiplier: ${payoutMultiplier})`, 'color: green; font-weight: bold;', 'color: inherit;');
+                    console.log(`%cWIN!%c Payline <span class="math-inline">\{lineIndex \+ 1\} \(\[</span>{currentPayline.join(',')}]), Symbol: ${paySymbol}, Count: ${matchCount}, Payout: ${lineWin} (Multiplier: ${payoutMultiplier})`, 'color: green; font-weight: bold;', 'color: inherit;');
                     winningLinesInfo.push({ line: lineIndex + 1, symbol: paySymbol, count: matchCount, amount: lineWin });
                 }
             }
         } // Fim do loop de Paylines
 
-        // --- TODO: Adicionar Verificação de Scatters (se aplicável) ---
+        // --- TODO: Verificação de Scatters ---
 
         console.log('Winning Lines Info:', winningLinesInfo);
-        console.log(`Total Win Calculated (sum of multipliers for now): ${totalWin}`);
+        console.log(`Total Win Calculated (based on betPerLine=1): ${totalWin}`);
 
-        // TODO: Atualizar saldo (localmente e via IPC) se totalWin > 0
-        // TODO: Mostrar animação de vitória / valor ganho na UI
+        // --- TODO: Atualizar saldo e UI ---
 
         return totalWin;
     }
     // --- FIM DO MÉTODO checkWins ---
 
-    // Modifique o startSpin para passar os índices finais para checkWins
-    // (Nenhuma mudança necessária aqui se checkWins já estava sendo chamado corretamente)
+    
+    // SUBSTITUA O MÉTODO startSpin INTEIRO POR ESTE:
+    // =========================================================================
+    // SUBSTITUA O MÉTODO startSpin INTEIRO POR ESTA VERSÃO FINAL E ESTÁVEL
+    // =========================================================================
     startSpin() {
-        // ... (código como na Ação 57, garantindo que onComplete chama checkWins) ...
-        // Exemplo da chamada dentro do onComplete do último tween:
-        // onComplete: () => {
-        //    ...
-        //    if (i === this.numReels - 1) {
-        //        console.log('--- All reels stopped! ---');
-        //        this.checkWins(finalStopIndexesCopy); // Passa os índices finais
-        //        // TODO: Reabilitar botão...
-        //    }
-        // },
-        // onCompleteScope: this
-        // ...
-    }
-
-    startSpin() {
+        // --- PASSO 0: Verificar se já está girando ---
+        if (this.isSpinning) {
+            console.warn("GameScene: Spin attempt ignored, already spinning.");
+            return; // Sai imediatamente se já estiver em processo
+        }
         console.log('--- GameScene: startSpin() called! ---');
-        // Use o offset Y final que você definiu em createReels (ex: -75)
-        const reelsCenterY = this.cameras.main.centerY - 75;
+        this.isSpinning = true; // <<< Define a flag para bloquear novos spins
 
-        // TODO: Lógica de custo da aposta e verificação de saldo...
-        // TODO: Desabilitar botão de Spin na UIScene...
+        // --- Desabilitar o Botão na UI ---
+        const uiScene = this.scene.get('UIScene');
+        if (uiScene && typeof uiScene.disableSpinButton === 'function') {
+            uiScene.disableSpinButton();
+        } else {
+            console.warn('GameScene: Could not get UIScene or disableSpinButton function.');
+        }
+
+        // --- Configurações e Cálculos ---
+        const reelsCenterY = this.cameras.main.centerY - 75; // Seu offset Y final
+        const stopDurationBase = 960;  // Duração lenta que você gostou
+        const reelDelay = 180;        // Delay lento que você gostou
+        const stepY = this.symbolHeight + this.symbolPaddingY;
+
+        // TODO: Lógica de custo da aposta aqui...
 
         // 1. Gerar os índices de parada finais aleatórios
         let finalStopIndexes = [];
         for (let i = 0; i < this.numReels; i++) {
             const buffer = this.visibleRows;
-            const stripLength = this.reelSymbolStrips[i].length;
-            finalStopIndexes[i] = Phaser.Math.RND.between(buffer, stripLength - 1 - buffer);
+            if (!this.reelSymbolStrips[i] || this.reelSymbolStrips[i].length <= buffer * 2) {
+                console.error(`Invalid reel strip for reel ${i}.`);
+                finalStopIndexes[i] = 0; // Índice padrão em caso de erro
+            } else {
+                const stripLength = this.reelSymbolStrips[i].length;
+                finalStopIndexes[i] = Phaser.Math.RND.between(buffer, stripLength - 1 - buffer);
+            }
         }
         console.log('Random stop indexes determined:', finalStopIndexes);
+        const finalStopIndexesCopy = [...finalStopIndexes];
 
-        // 2. Configurações da Animação de PARADA
-        const stopDurationBase = 960;  // Duração da animação de DESACELERAÇÃO (ajuste!)
-        const reelDelay = 180;        // Atraso entre as paradas das colunas
-        const startOffsetSymbols = 15; // Quantos símbolos "acima" do ponto final a animação vai começar (simula vindo de um giro)
-        const stepY = this.symbolHeight + this.symbolPaddingY;
+        // 2. Iniciar Animações (Versão Estável: Direto para o Final)
+        console.log('Starting final position tweens...');
+        let tweensCompleted = 0;
 
-        // Copie os índices finais para usar no onComplete
-        const finalStopIndexesCopy = [...finalStopIndexes]; // Copia para evitar problemas de closure/timing
-
-        console.log('Starting stopping tweens...');
         for (let i = 0; i < this.numReels; i++) {
             const targetStopIndex = finalStopIndexes[i];
             const reelContainer = this.reels[i];
 
             if (!reelContainer) {
                 console.error(`Error: Invalid reel container for reel ${i}`);
+                tweensCompleted++;
+                if (tweensCompleted === this.numReels) { this.isSpinning = false; } // Reseta se todos falharem
                 continue;
             }
 
-            // Posição Y final REAL onde o container deve parar
+            // Calcula APENAS a posição Y final REAL
             const finalContainerY = reelsCenterY - (targetStopIndex * stepY);
-
-            // Calcula a posição Y inicial para a animação de parada
-            const startTweenY = finalContainerY - (startOffsetSymbols * stepY);
-
-            // --- Define a Posição Inicial INSTANTANEAMENTE ---
-            reelContainer.y = startTweenY;
-            // --------------------------------------------------
-
-            // Duração da animação de parada
             const tweenDuration = stopDurationBase + i * reelDelay;
 
-            console.log(`Reel <span class="math-inline">\{i\+1\}\: Setting start Y\=</span>{startTweenY.toFixed(2)}, tweening to Final Y=${finalContainerY.toFixed(2)} (Index: ${targetStopIndex})`);
+            console.log(`Reel <span class="math-inline">\{i\+1\}\: Tweening from current Y\=</span>{reelContainer.y.toFixed(2)} to Final Y=${finalContainerY.toFixed(2)} (Index: ${targetStopIndex})`);
 
-            // --- Cria a Animação (Tween) de Parada ---
+            // --- Cria a Animação (Tween) Direta para o Ponto Final ---
             this.tweens.add({
                 targets: reelContainer,
-                y: finalContainerY,         // Anima PARA a posição final correta
-                duration: tweenDuration,
-                ease: 'Expo.easeOut',       // Easing de desaceleração forte (experimente 'Back.easeOut', 'Circ.easeOut')
-                delay: i * 100,             // Atraso para iniciar a animação de parada
+                y: finalContainerY,         // Anima direto PARA a posição final
+                duration: tweenDuration,    // Usa a duração mais longa que você gostou
+                ease: 'Expo.easeOut',       // Mantém a desaceleração suave
+                delay: i * 100,             // Mantém o atraso sequencial
                 onComplete: () => {
-                    // Log final - não precisa mais de snap
-                    console.log(`Reel <span class="math-inline">\{i \+ 1\} stopped at Y\=</span>{reelContainer.y.toFixed(2)} (Target index: ${targetStopIndex})`);
+                    tweensCompleted++;
+                    console.log(`Reel <span class="math-inline">\{i \+ 1\} stopped at Y\=</span>{reelContainer.y.toFixed(2)} (Target index: <span class="math-inline">\{targetStopIndex\}\) \- \(</span>{tweensCompleted}/${this.numReels})`);
 
-                    if (i === this.numReels - 1) {
+                    // Verifica se TODOS os tweens terminaram
+                    if (tweensCompleted === this.numReels) {
                         console.log('--- All reels stopped! ---');
-                        // --- CHAMADA PARA checkWins ---
-                        this.checkWins(finalStopIndexesCopy); // Passa os índices finais
-                        // --- FIM DA CHAMADA ---
-        
-                        // TODO: Reabilitar o botão de Spin na UIScene
+                        // Verifica Ganhos
+                        try {
+                            this.checkWins(finalStopIndexesCopy);
+                        } catch (winError) {
+                            console.error("Error during checkWins:", winError);
+                        }
+
+                        // TODO: Lógica de adicionar ganhos ao saldo...
+
+                        // --- Reabilitar o Botão e Resetar Flag ---
+                        console.log('Attempting to re-enable spin button and reset flag...');
+                        const finalUiScene = this.scene.get('UIScene');
+                        if (finalUiScene && typeof finalUiScene.enableSpinButton === 'function') {
+                            finalUiScene.enableSpinButton();
+                        } else {
+                            console.warn('GameScene: Could not get UIScene or enableSpinButton function on final complete.');
+                        }
+                        this.isSpinning = false; // <<< RESETA A FLAG AQUI
+                        console.log('isSpinning flag set to false.');
+                        // --- Fim Reabilitar / Resetar ---
                     }
                 },
                 onCompleteScope: this
             });
         } // Fim do loop for
-    }
+    } // --- FIM DO MÉTODO startSpin ---
+
+    // ... (checkWins, create, createReels, preload, constructor... sem mudanças) ...
 
     update(time, delta) {
         // O loop de jogo principal (executa a cada frame)
