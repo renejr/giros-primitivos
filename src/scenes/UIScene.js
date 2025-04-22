@@ -16,7 +16,17 @@ export default class UIScene extends Phaser.Scene {
         this.betStep = 1.00;    // Quanto a aposta aumenta/diminui por clique (ajuste!)
         this.betPlusButton = null;
         this.betMinusButton = null;
-        // --- FIM DA ADIÇÃO ---
+        
+        this.balanceText = null; // Inicializa
+        this.betText = null;
+        this.playerProfile = null;
+        this.spinButton = null;
+        this.betPlusButton = null;
+        this.betMinusButton = null;
+        // Definir min/max/step aqui ou buscar de config
+        this.minBet = 1.00;
+        this.maxBet = 10.00;
+        this.betStep = 1.00;
     }
 
     preload() {
@@ -24,36 +34,46 @@ export default class UIScene extends Phaser.Scene {
         // Carregar assets da UI...
     }
 
+    updateBalanceDisplay(newBalance) {
+        // Se newBalance não for fornecido, tenta pegar do registry
+        const balanceToShow = newBalance !== undefined ? newBalance : this.registry.get('balance');
+        if (this.balanceText && balanceToShow !== undefined) {
+           const formattedBalance = parseFloat(balanceToShow).toFixed(2);
+           this.balanceText.setText(`Saldo: $${formattedBalance}`);
+           console.log(`UIScene: Balance display updated to ${formattedBalance}`);
+       } else if(this.balanceText) {
+            console.warn("UIScene: Balance text object exists, but no balance value found to update.");
+            this.balanceText.setText('Saldo: ---.--');
+       }
+   }
+
     // --- NOVO MÉTODO: Atualizar Texto da Aposta ---
     updateBetDisplay() {
-        if (this.betText) {
-            // Formata para ter sempre 2 casas decimais
-            const formattedBet = this.currentBet.toFixed(2);
-            this.betText.setText(`Aposta: $${formattedBet}`);
-             console.log(`UIScene: Bet display updated to ${formattedBet}`);
-        } else {
-             console.warn("UIScene: Bet text object not available to update.");
-        }
-    }
+        const currentBet = this.registry.get('currentBet'); // Lê do registry
+        if (this.betText && currentBet !== undefined) {
+           const formattedBet = currentBet.toFixed(2);
+           this.betText.setText(`Aposta: $${formattedBet}`);
+           console.log(`UIScene: Bet display updated to ${formattedBet}`);
+       } else if (this.betText) {
+           console.warn("UIScene: Bet text object exists, but no currentBet value found to update.");
+           this.betText.setText('Aposta: ---.--');
+       }
+   }
 
     // Cole este método COMPLETO no lugar do seu create() atual em UIScene.js
     async create() {
         console.log('UIScene: create()');
 
-        // --- Cria e Posiciona Texto da Aposta ---
-        // (Texto do Saldo ainda comentado, você pode reativar quando quiser)
-        /*
         this.balanceText = this.add.text(
-            50, 50, 'Saldo: Carregando...',
+            50, 30, 'Saldo: Carregando...',
             { fontSize: '24px', fill: '#fff', fontStyle: 'bold' }
         );
-        */
+
+        // Texto Aposta (como antes)
         this.betText = this.add.text(
-            this.cameras.main.width - 50, // Alinhado à direita com padding
-            50,                          // Posição Y no topo
-            'Aposta: Carregando...',     // Texto inicial
+            this.cameras.main.width - 50, 30, 'Aposta: Carregando...',
             { fontSize: '24px', fill: '#fff', fontStyle: 'bold' }
-        ).setOrigin(1, 0); // Origem no canto SUPERIOR DIREITO do texto
+        ).setOrigin(1, 0);
 
         // --- Busca Dados Iniciais e Atualiza Aposta ---
         console.log('UIScene: Requesting profile data via electronAPI...');
@@ -63,18 +83,22 @@ export default class UIScene extends Phaser.Scene {
                 console.log('UIScene: Profile data received:', this.playerProfile);
 
                 if (this.playerProfile) {
-                    // Inicializa a aposta atual
-                    this.currentBet = parseFloat(this.playerProfile.last_bet) || this.minBet;
-                    this.currentBet = Math.max(this.currentBet, this.minBet);
-                    this.currentBet = Math.min(this.currentBet, this.maxBet);
-                    this.updateBetDisplay(); // Atualiza o texto da aposta com valor inicial
+                    // --- Inicializa Registry e UI ---
+                    let initialBet = parseFloat(this.playerProfile.last_bet) || this.minBet;
+                    initialBet = Math.max(initialBet, this.minBet);
+                    initialBet = Math.min(initialBet, this.maxBet);
 
-                    // TODO: Atualizar texto do saldo quando reativado
-                    // if (this.balanceText) { /* ... código para atualizar saldo ... */ }
+                    let initialBalance = parseFloat(this.playerProfile.balance) || 0;
+                    this.registry.set('balance', initialBalance);
+                    this.registry.set('currentBet', initialBet);
 
+                    // Atualiza displays iniciais
+                    this.updateBalanceDisplay(); // <<< CHAMA FUNÇÃO PARA SALDO
+                    this.updateBetDisplay();
+                    // --- Fim Inicializa ---
                 } else {
                     console.error('UIScene: Failed to retrieve profile data (null received).');
-                    if(this.balanceText) this.balanceText.setText('Saldo: Erro');
+                    if(this.balanceText) this.balanceText.setText('Saldo: Erro'); // <<< ATUALIZA SE balanceText EXISTIR
                     if(this.betText) this.betText.setText('Aposta: Erro');
                 }
             } else {
@@ -90,54 +114,54 @@ export default class UIScene extends Phaser.Scene {
              if(this.betText) this.betText.setText('Aposta: Erro');
         }
 
-        // --- Adicionar Botões de Ajuste de Aposta (+ / -) ---
-        const buttonSize = 64; // Usando 64x64 como sugerido (ajuste se usar outro tamanho)
-        const buttonPadding = 10; // Espaço entre botões e texto
-
-        // Calcula limites do texto APÓS ele ter sido potencialmente atualizado
+        // --- Adicionar Botões + / - (Listeners agora atualizam Registry e chamam IPC) ---
+        const buttonSize = 64;
+        const buttonPadding = 10;
+        // Recalcula bounds APÓS definir a posição Y do texto
         const betTextBounds = this.betText.getBounds();
-
-        // --- Coordenadas CORRIGIDAS (Abaixo do Texto) ---
+        // Esta linha usa betTextBounds.bottom, que agora será menor devido ao Y=30
         const betButtonsY = betTextBounds.bottom + buttonPadding + (buttonSize / 2);
-        // Posiciona o botão '+' um pouco à esquerda da borda direita do texto
         const plusButtonX = betTextBounds.right - (buttonSize / 2) - buttonPadding;
-        // Posiciona o botão '-' à esquerda do '+'
         const minusButtonX = plusButtonX - buttonSize - buttonPadding;
-        // --- Fim Coordenadas Corrigidas ---
 
         // Botão Menos (-)
-        this.betMinusButton = this.add.image(minusButtonX, betButtonsY, 'betMinusButton')
-            .setDisplaySize(buttonSize, buttonSize)
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true });
-
+        this.betMinusButton = this.add.image(minusButtonX, betButtonsY, 'betMinusButton') /* ... setDisplaySize, etc ... */ .setInteractive();
         this.betMinusButton.on('pointerdown', () => {
-            this.currentBet -= this.betStep;
-            this.currentBet = Math.max(this.currentBet, this.minBet); // Garante mínimo
-            this.updateBetDisplay(); // Atualiza o texto
+            let currentBet = this.registry.get('currentBet'); // Lê do registry
+            currentBet -= this.betStep;
+            currentBet = Math.max(currentBet, this.minBet);
+            this.registry.set('currentBet', currentBet); // Salva no registry
+            this.updateBetDisplay(); // Atualiza texto
             this.betMinusButton.setAlpha(0.7);
-            // TODO: Salvar last_bet no DB
+            // Salva no DB
+            if (window.electronAPI?.updateProfile) {
+                 window.electronAPI.updateProfile({ last_bet: currentBet })
+                      .then(success => console.log('UIScene: last_bet update sent to DB:', success))
+                      .catch(err => console.error('UIScene: Error sending last_bet update:', err));
+            }
         });
         this.betMinusButton.on('pointerup', () => { this.betMinusButton.setAlpha(1); });
         this.betMinusButton.on('pointerout', () => { this.betMinusButton.setAlpha(1); });
 
         // Botão Mais (+)
-        this.betPlusButton = this.add.image(plusButtonX, betButtonsY, 'betPlusButton')
-            .setDisplaySize(buttonSize, buttonSize)
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true });
-
+        this.betPlusButton = this.add.image(plusButtonX, betButtonsY, 'betPlusButton') /* ... setDisplaySize, etc ... */ .setInteractive();
         this.betPlusButton.on('pointerdown', () => {
-            this.currentBet += this.betStep;
-            this.currentBet = Math.min(this.currentBet, this.maxBet); // Garante máximo
-            this.updateBetDisplay(); // Atualiza o texto
+            let currentBet = this.registry.get('currentBet'); // Lê do registry
+            currentBet += this.betStep;
+            currentBet = Math.min(currentBet, this.maxBet);
+            this.registry.set('currentBet', currentBet); // Salva no registry
+            this.updateBetDisplay(); // Atualiza texto
             this.betPlusButton.setAlpha(0.7);
-            // TODO: Salvar last_bet no DB
+            // Salva no DB
+             if (window.electronAPI?.updateProfile) {
+                 window.electronAPI.updateProfile({ last_bet: currentBet })
+                      .then(success => console.log('UIScene: last_bet update sent to DB:', success))
+                      .catch(err => console.error('UIScene: Error sending last_bet update:', err));
+            }
         });
         this.betPlusButton.on('pointerup', () => { this.betPlusButton.setAlpha(1); });
         this.betPlusButton.on('pointerout', () => { this.betPlusButton.setAlpha(1); });
         // --- Fim Botões + / - ---
-
 
         // --- Adicionar Botão de Spin ---
         const spinButtonX = this.cameras.main.width - 110;  // Sua posição X ajustada
@@ -163,6 +187,23 @@ export default class UIScene extends Phaser.Scene {
              if (this.spinButton.input?.enabled) { this.spinButton.setAlpha(1); }
         });
          // --- Fim Botão Spin ---
+
+        const gameScene = this.scene.get('GameScene');
+        if(gameScene) {
+            gameScene.events.on('balanceUpdated', this.updateBalanceDisplay, this);
+            console.log("UIScene: Listener for 'balanceUpdated' event added.");
+        } else {
+            // Tenta de novo um pouco depois se a GameScene não estiver pronta imediatamente
+            this.time.delayedCall(500, () => {
+                 const gameSceneRetry = this.scene.get('GameScene');
+                 if(gameSceneRetry) {
+                     gameSceneRetry.events.on('balanceUpdated', this.updateBalanceDisplay, this);
+                     console.log("UIScene: Listener for 'balanceUpdated' event added (on retry).");
+                 } else {
+                     console.error("UIScene: Could not find GameScene to add balance listener.");
+                 }
+            });
+        }
 
     } // --- FIM DO MÉTODO CREATE ---
     

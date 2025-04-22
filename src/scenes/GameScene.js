@@ -172,146 +172,140 @@ export default class GameScene extends Phaser.Scene {
         console.log('Finished creating initial reels display with full strips.');
     }
     
-// SUBSTITUA O MÉTODO checkWins INTEIRO POR ESTE:
-    checkWins(finalStopIndexes) {
-        console.log('--- GameScene: checkWins() called ---');
-        const wildSymbolKey = 'symbol_wild'; // Chave do Wild definida em Constants.js
-        // const scatterSymbolKey = 'symbol_scatter'; // Chave do Scatter (para TODO futuro)
-
-        // 1. Construir a grade 5x3 visível a partir dos índices de parada
+    // SUBSTITUA O MÉTODO checkWins INTEIRO POR ESTE:
+    checkWins(finalStopIndexes, currentBet) { // <<< ACEITA currentBet COMO PARÂMETRO
+        console.log(`--- GameScene: checkWins() called with Bet: ${currentBet} ---`);
+        const wildSymbolKey = 'symbol_wild';
+    
+        // 1. Construir a grade visível (como antes, com verificações)
         let visibleSymbolGrid = [];
+        // ... (código idêntico ao anterior para construir visibleSymbolGrid a partir de finalStopIndexes) ...
         for (let i = 0; i < this.numReels; i++) {
             visibleSymbolGrid[i] = [];
             const stopIndex = finalStopIndexes[i];
             const strip = this.reelSymbolStrips[i];
             if (!strip || stopIndex === undefined || stopIndex < 0 || stopIndex >= strip.length) {
-                console.error(`Invalid stopIndex (${stopIndex}) or strip for reel ${i} in checkWins`);
-                visibleSymbolGrid[i] = [null, null, null];
-                continue;
+                 console.error(`Invalid stopIndex (${stopIndex}) or strip for reel ${i} in checkWins`);
+                 visibleSymbolGrid[i] = [null, null, null];
+                 continue;
             }
-            const indexRow0 = (stopIndex - 1 + strip.length) % strip.length; // Topo
-            const indexRow1 = stopIndex;                                   // Meio
-            const indexRow2 = (stopIndex + 1) % strip.length;              // Base
+            const indexRow0 = (stopIndex - 1 + strip.length) % strip.length;
+            const indexRow1 = stopIndex;
+            const indexRow2 = (stopIndex + 1) % strip.length;
             visibleSymbolGrid[i][0] = strip[indexRow0];
             visibleSymbolGrid[i][1] = strip[indexRow1];
             visibleSymbolGrid[i][2] = strip[indexRow2];
         }
-        // Log formatado para melhor visualização da grade
         console.log('Visible Grid for Win Check:');
-        for (let r = 0; r < this.visibleRows; r++) {
-            let rowStr = "";
-            for (let c = 0; c < this.numReels; c++) {
-                rowStr += (visibleSymbolGrid[c][r] || 'NULL').padEnd(20); // Ajuste padEnd conforme necessário
-            }
-            console.log(`[${rowStr}]`);
+        // ... (log formatado da grade como antes) ...
+         for (let r = 0; r < this.visibleRows; r++) {
+             let rowStr = "";
+             for (let c = 0; c < this.numReels; c++) {
+                 rowStr += (visibleSymbolGrid[c][r] || 'NULL').padEnd(20);
+             }
+             console.log(`[${rowStr}]`);
         }
-
-
+    
         // 2. Inicializar ganhos
         let totalWin = 0;
         let winningLinesInfo = [];
-
-        // 3. Iterar sobre cada PAYLINE
+    
+        // --- CÁLCULO DA APOSTA POR LINHA ---
+        // Assume que currentBet é a APOSTA TOTAL. Dividimos pelo nº de linhas ativas.
+        // Se PAYLINES estiver vazio, usamos a aposta total como aposta por linha (ou erro).
+        const numberOfPaylines = PAYLINES.length > 0 ? PAYLINES.length : 1;
+        const betPerLine = currentBet / numberOfPaylines; // <<< USA O currentBet PASSADO
+        console.log(`Bet per line used for calculation: ${betPerLine.toFixed(2)} (Total Bet: ${currentBet})`);
+        // --- FIM CÁLCULO APOSTA ---
+    
+        // 3. Iterar sobre cada PAYLINE (lógica como antes)
         for (let lineIndex = 0; lineIndex < PAYLINES.length; lineIndex++) {
+            // ... (lógica como antes para pegar lineSymbols, paySymbol, matchCount incluindo Wilds) ...
             const currentPayline = PAYLINES[lineIndex];
             let lineSymbols = [];
-
-            // Coleta os símbolos da payline atual
             for (let reelIndex = 0; reelIndex < this.numReels; reelIndex++) {
-                // Garante que não tentemos acessar fora dos limites da payline definida
-                if(reelIndex < currentPayline.length){
-                    const rowIndex = currentPayline[reelIndex];
-                    lineSymbols.push(visibleSymbolGrid[reelIndex][rowIndex]);
-                } else {
-                    lineSymbols.push(null); // Preenche com null se payline for mais curta
-                }
+                 if(reelIndex < currentPayline.length){
+                     const rowIndex = currentPayline[reelIndex];
+                     lineSymbols.push(visibleSymbolGrid[reelIndex][rowIndex]);
+                 } else { lineSymbols.push(null); }
             }
-
-            // 4. Verifica combinações da esquerda para a direita
             let firstSymbol = lineSymbols[0];
-            if (firstSymbol === null) continue; // Pula linha se começar com erro/null
-
+            if (firstSymbol === null) continue;
             let paySymbol = firstSymbol;
             let matchCount = 0;
-
-            // Lógica para Wild no início
             if (firstSymbol === wildSymbolKey) {
                 matchCount = 1;
-                for (let k = 1; k < this.numReels; k++) { // Usa this.numReels aqui
-                    if(lineSymbols[k] === null) break; // Para se a linha acabar
-                    if (lineSymbols[k] !== wildSymbolKey) {
-                        paySymbol = lineSymbols[k];
-                        break;
-                    }
-                    matchCount++;
+                for (let k = 1; k < this.numReels; k++) {
+                     if(lineSymbols[k] === null) break;
+                     if (lineSymbols[k] !== wildSymbolKey) { paySymbol = lineSymbols[k]; break; }
+                     matchCount++;
                 }
-                // Se linha inteira de Wilds, paySymbol = wildSymbolKey
-                if (matchCount === this.numReels) paySymbol = wildSymbolKey;
-            } else {
-                paySymbol = firstSymbol;
-            }
-
-            // Pula linha se o símbolo base não paga (ou é Scatter, tratar depois)
-            if (!PAYTABLE[paySymbol] /* && paySymbol !== scatterSymbolKey */) {
-                continue;
-            }
-
-            // Reseta matchCount e conta de novo incluindo o símbolo base correto
+                 if (matchCount === this.numReels) paySymbol = wildSymbolKey;
+            } else { paySymbol = firstSymbol; }
+            if (!PAYTABLE[paySymbol]) { continue; }
             matchCount = 0;
             for (let i = 0; i < this.numReels; i++) {
-                if (lineSymbols[i] === null) break; // Para se a linha acabar
-
-                if (lineSymbols[i] === paySymbol || lineSymbols[i] === wildSymbolKey) {
-                    matchCount++;
-                } else {
-                    break; // Combinação quebrada
-                }
+                 if (lineSymbols[i] === null) break;
+                 if (lineSymbols[i] === paySymbol || lineSymbols[i] === wildSymbolKey) { matchCount++; }
+                 else { break; }
             }
-
-            // 5. Calcula o ganho se houver 3 ou mais
+    
+    
+            // 5. Calcula o ganho se houver 3 ou mais, USANDO betPerLine
             if (matchCount >= 3) {
-                const payoutIndex = matchCount - 3; // Índice para array [3, 4, 5]
+                const payoutIndex = matchCount - 3;
                 const payoutMultiplier = (PAYTABLE[paySymbol] && PAYTABLE[paySymbol].length > payoutIndex)
-                                        ? PAYTABLE[paySymbol][payoutIndex]
-                                        : 0;
-
+                                         ? PAYTABLE[paySymbol][payoutIndex]
+                                         : 0;
                 if (payoutMultiplier > 0) {
-                    // USA VALOR PLACEHOLDER PARA APOSTA POR LINHA!
-                    const betPerLine = 1; // <<< PRECISA SER SUBSTITUÍDO PELA APOSTA REAL
+                    // --- USA betPerLine REAL ---
                     const lineWin = payoutMultiplier * betPerLine;
-
+                    // --- FIM ---
                     totalWin += lineWin;
-                    console.log(`%cWIN!%c Payline <span class="math-inline">\{lineIndex \+ 1\} \(\[</span>{currentPayline.join(',')}]), Symbol: ${paySymbol}, Count: ${matchCount}, Payout: ${lineWin} (Multiplier: ${payoutMultiplier})`, 'color: green; font-weight: bold;', 'color: inherit;');
+                    console.log(`%cWIN!%c Payline ${lineIndex + 1} ([${currentPayline.join(',')}]), Symbol: ${paySymbol}, Count: ${matchCount}, Payout: ${lineWin.toFixed(2)} (Multiplier: ${payoutMultiplier})`, 'color: green; font-weight: bold;', 'color: inherit;');
                     winningLinesInfo.push({ line: lineIndex + 1, symbol: paySymbol, count: matchCount, amount: lineWin });
                 }
             }
         } // Fim do loop de Paylines
-
+    
         // --- TODO: Verificação de Scatters ---
-
+    
         console.log('Winning Lines Info:', winningLinesInfo);
-        console.log(`Total Win Calculated (based on betPerLine=1): ${totalWin}`);
-
-        // --- TODO: Atualizar saldo e UI ---
-
-        return totalWin;
+        console.log(`Total Win Calculated: ${totalWin.toFixed(2)}`);
+    
+        // --- Adicionar Ganhos ao Saldo ---
+        if (totalWin > 0) {
+            let currentBalance = this.registry.get('balance') || 0; // Pega do registry
+            currentBalance += totalWin;
+            this.registry.set('balance', currentBalance); // Atualiza registry
+            console.log(`Win amount ${totalWin.toFixed(2)} added. New balance (local): ${currentBalance.toFixed(2)}`);
+            // Salva o novo saldo no DB via IPC
+            if (window.electronAPI?.updateProfile) {
+                window.electronAPI.updateProfile({ balance: currentBalance })
+                    .then(success => console.log('GameScene: Balance update (after win) sent to DB:', success))
+                    .catch(err => console.error('GameScene: Error sending balance update (after win):', err));
+            }
+            // Emite evento para UI atualizar o saldo APÓS adicionar ganho
+            this.events.emit('balanceUpdated', currentBalance);
+        }
+        // --- Fim Adicionar Ganhos ---
+    
+    
+        return totalWin; // Retorna o valor numérico do ganho
     }
     // --- FIM DO MÉTODO checkWins ---
 
-    
-    // SUBSTITUA O MÉTODO startSpin INTEIRO POR ESTE:
-    // =========================================================================
-    // SUBSTITUA O MÉTODO startSpin INTEIRO POR ESTA VERSÃO FINAL E ESTÁVEL
-    // =========================================================================
+    // --- MÉTODO ATUALIZADO ---
     startSpin() {
         // --- PASSO 0: Verificar se já está girando ---
         if (this.isSpinning) {
-            console.warn("GameScene: Spin attempt ignored, already spinning.");
-            return; // Sai imediatamente se já estiver em processo
+            console.warn(`%cSpin Ignore: Already spinning. Flag is ${this.isSpinning}`, "color: orange;");
+            return;
         }
-        console.log('--- GameScene: startSpin() called! ---');
-        this.isSpinning = true; // <<< Define a flag para bloquear novos spins
-
+        console.log('%c--- GameScene: startSpin() called! ---', "color: blue; font-weight: bold;");
+        this.isSpinning = true; // <<< Define a flag como true
+        console.log(`%cSpin Start: Flag set to ${this.isSpinning}`, "color: blue;");
+    
         // --- Desabilitar o Botão na UI ---
         const uiScene = this.scene.get('UIScene');
         if (uiScene && typeof uiScene.disableSpinButton === 'function') {
@@ -319,93 +313,129 @@ export default class GameScene extends Phaser.Scene {
         } else {
             console.warn('GameScene: Could not get UIScene or disableSpinButton function.');
         }
-
-        // --- Configurações e Cálculos ---
-        const reelsCenterY = this.cameras.main.centerY - 75; // Seu offset Y final
-        const stopDurationBase = 960;  // Duração lenta que você gostou
-        const reelDelay = 180;        // Delay lento que você gostou
-        const stepY = this.symbolHeight + this.symbolPaddingY;
-
-        // TODO: Lógica de custo da aposta aqui...
-
-        // 1. Gerar os índices de parada finais aleatórios
-        let finalStopIndexes = [];
-        for (let i = 0; i < this.numReels; i++) {
-            const buffer = this.visibleRows;
-            if (!this.reelSymbolStrips[i] || this.reelSymbolStrips[i].length <= buffer * 2) {
-                console.error(`Invalid reel strip for reel ${i}.`);
-                finalStopIndexes[i] = 0; // Índice padrão em caso de erro
-            } else {
-                const stripLength = this.reelSymbolStrips[i].length;
-                finalStopIndexes[i] = Phaser.Math.RND.between(buffer, stripLength - 1 - buffer);
-            }
+    
+        // --- Ler Aposta e Saldo do Registry ---
+        let currentBet = this.registry.get('currentBet');
+        let balance = this.registry.get('balance');
+    
+        // Usa valores padrão se não encontrados no registry (importante na primeira vez)
+        if (currentBet === undefined) { currentBet = this.minBet || 1; }
+        if (balance === undefined) { balance = 1000; } // Ou buscar do profile default se necessário
+        console.log(`Spin Start: Bet= ${currentBet}, Balance= ${balance}`);
+    
+        // --- Verificar Saldo ---
+        if (balance < currentBet) {
+            console.warn(`Spin aborted. Insufficient balance (${balance}) for bet (${currentBet}).`);
+            // Reabilita o botão imediatamente e reseta a flag se não puder girar
+            if (uiScene && typeof uiScene.enableSpinButton === 'function') { uiScene.enableSpinButton(); }
+            this.isSpinning = false;
+            return;
         }
-        console.log('Random stop indexes determined:', finalStopIndexes);
+    
+        // --- Deduzir Aposta e Salvar ---
+        balance -= currentBet;
+        this.registry.set('balance', balance); // Atualiza registry localmente
+        console.log(`Bet ${currentBet.toFixed(2)} deducted. New balance (local): ${balance.toFixed(2)}`);
+        // Salva o novo saldo no DB via IPC
+        if (window.electronAPI?.updateProfile) {
+            window.electronAPI.updateProfile({ balance: balance })
+                .then(success => console.log('GameScene: Balance update (after bet) sent to DB:', success))
+                .catch(err => console.error('GameScene: Error sending balance update (after bet):', err));
+        }
+        // Emite evento para UI atualizar o saldo IMEDIATAMENTE após deduzir
+        this.events.emit('balanceUpdated', balance);
+        // --- Fim Deduzir Aposta ---
+    
+        // --- Configurações e Geração de Resultados (como antes) ---
+        const reelsCenterY = this.cameras.main.centerY - 75;
+        const stopDurationBase = 960;
+        const reelDelay = 180;
+        const stepY = this.symbolHeight + this.symbolPaddingY;
+    
+        let finalStopIndexes = [];
+        // ... (Loop for para gerar finalStopIndexes como antes)...
+         for (let i = 0; i < this.numReels; i++) {
+             const buffer = this.visibleRows;
+             if (!this.reelSymbolStrips[i] || this.reelSymbolStrips[i].length <= buffer * 2) {
+                 console.error(`Invalid reel strip for reel ${i}.`);
+                 finalStopIndexes[i] = 0;
+             } else {
+                  const stripLength = this.reelSymbolStrips[i].length;
+                  finalStopIndexes[i] = Phaser.Math.RND.between(buffer, stripLength - 1 - buffer);
+             }
+         }
+        console.log('Spin Start: Random stop indexes determined:', finalStopIndexes);
         const finalStopIndexesCopy = [...finalStopIndexes];
-
-        // 2. Iniciar Animações (Versão Estável: Direto para o Final)
-        console.log('Starting final position tweens...');
+    
+        // --- Iniciar Animações de Parada (Versão Estável) ---
+        console.log('%cSpin Start: Starting final position tweens...', "color: blue;");
         let tweensCompleted = 0;
-
+    
         for (let i = 0; i < this.numReels; i++) {
             const targetStopIndex = finalStopIndexes[i];
             const reelContainer = this.reels[i];
-
+    
             if (!reelContainer) {
-                console.error(`Error: Invalid reel container for reel ${i}`);
+                console.error(`Spin Error: Invalid reel container for reel ${i}`);
                 tweensCompleted++;
-                if (tweensCompleted === this.numReels) { this.isSpinning = false; } // Reseta se todos falharem
+                 if (tweensCompleted === this.numReels) { this.isSpinning = false; }
                 continue;
             }
-
-            // Calcula APENAS a posição Y final REAL
+    
+            // Calcula Posição Final
             const finalContainerY = reelsCenterY - (targetStopIndex * stepY);
             const tweenDuration = stopDurationBase + i * reelDelay;
-
-            console.log(`Reel <span class="math-inline">\{i\+1\}\: Tweening from current Y\=</span>{reelContainer.y.toFixed(2)} to Final Y=${finalContainerY.toFixed(2)} (Index: ${targetStopIndex})`);
-
-            // --- Cria a Animação (Tween) Direta para o Ponto Final ---
+    
+            // Log Detalhado Antes do Tween
+            console.log(`Reel ${i+1}: PRE-TWEEN State - CurrentY=${reelContainer.y.toFixed(2)}`);
+            console.log(`Reel ${i+1}: PRE-TWEEN Calc - TargetY=${finalContainerY.toFixed(2)}, Duration=${tweenDuration}, Ease=Expo.easeOut, Delay=${i * 100}`);
+    
+            // Cria a Animação (Tween) Direta para o Ponto Final
             this.tweens.add({
                 targets: reelContainer,
-                y: finalContainerY,         // Anima direto PARA a posição final
-                duration: tweenDuration,    // Usa a duração mais longa que você gostou
-                ease: 'Expo.easeOut',       // Mantém a desaceleração suave
-                delay: i * 100,             // Mantém o atraso sequencial
+                y: finalContainerY,
+                duration: tweenDuration,
+                ease: 'Expo.easeOut',
+                delay: i * 100,
                 onComplete: () => {
                     tweensCompleted++;
-                    console.log(`Reel <span class="math-inline">\{i \+ 1\} stopped at Y\=</span>{reelContainer.y.toFixed(2)} (Target index: <span class="math-inline">\{targetStopIndex\}\) \- \(</span>{tweensCompleted}/${this.numReels})`);
-
+                    console.log(`%cReel ${i + 1}: STOPPED at Y=${reelContainer.y.toFixed(2)} (Target index: ${targetStopIndex}) - (${tweensCompleted}/${this.numReels})`, "color: green;");
+                    console.log(`%cReel ${i + 1}: POST-TWEEN State - Alpha=${reelContainer.alpha}, Visible=${reelContainer.visible}`, "color: green;");
+    
                     // Verifica se TODOS os tweens terminaram
                     if (tweensCompleted === this.numReels) {
-                        console.log('--- All reels stopped! ---');
-                        // Verifica Ganhos
+                        console.log('%c--- All reels stopped! ---', "color: blue; font-weight: bold;");
+    
+                        // Verifica Ganhos PASSANDO A APOSTA ATUAL
+                        let totalWin = 0;
                         try {
-                            this.checkWins(finalStopIndexesCopy);
+                            // Lê a aposta atual do registry novamente para garantir
+                            let betForWinCheck = this.registry.get('currentBet') ?? 1;
+                            totalWin = this.checkWins(finalStopIndexesCopy, betForWinCheck); // <<< PASSA APOSTA
                         } catch (winError) {
                             console.error("Error during checkWins:", winError);
                         }
-
-                        // TODO: Lógica de adicionar ganhos ao saldo...
-
+                        // A lógica de adicionar ganhos ao saldo foi movida para DENTRO de checkWins
+    
                         // --- Reabilitar o Botão e Resetar Flag ---
-                        console.log('Attempting to re-enable spin button and reset flag...');
+                        console.log('%cSpin Complete: Attempting to re-enable spin button and reset flag...', "color: blue;");
+                        // Busca a referência da UIScene novamente por segurança
                         const finalUiScene = this.scene.get('UIScene');
                         if (finalUiScene && typeof finalUiScene.enableSpinButton === 'function') {
                             finalUiScene.enableSpinButton();
                         } else {
-                            console.warn('GameScene: Could not get UIScene or enableSpinButton function on final complete.');
+                             console.warn('GameScene: Could not get UIScene or enableSpinButton function on final complete.');
                         }
-                        this.isSpinning = false; // <<< RESETA A FLAG AQUI
-                        console.log('isSpinning flag set to false.');
+                        this.isSpinning = false;
+                        console.log(`%cSpin Complete: Flag set to ${this.isSpinning}`, "color: blue;");
                         // --- Fim Reabilitar / Resetar ---
                     }
                 },
                 onCompleteScope: this
             });
         } // Fim do loop for
-    } // --- FIM DO MÉTODO startSpin ---
-
-    // ... (checkWins, create, createReels, preload, constructor... sem mudanças) ...
+    }
+    // --- FIM DO MÉTODO startSpin ---
 
     update(time, delta) {
         // O loop de jogo principal (executa a cada frame)
