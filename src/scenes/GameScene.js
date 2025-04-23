@@ -83,7 +83,7 @@ export default class GameScene extends Phaser.Scene {
         ).setOrigin(0.5); // Centraliza o texto horizontalmente
  */
         // Chama a função para criar as colunas
-        this.createReels(); // <<< ADICIONADO 
+        this.createReels(); // <<< ADICIONADO
     
         // Linha comentada do background sólido (correto)
         // this.cameras.main.setBackgroundColor('#444');
@@ -93,70 +93,44 @@ export default class GameScene extends Phaser.Scene {
 
     createReels() {
         console.log('GameScene: createReels() called');
-        // --- Constantes e Cálculos de Posição X (como antes) ---
+        // Ajuste do cálculo da largura total e posicionamento
         const totalReelsWidth = (this.numReels * this.symbolWidth) + ((this.numReels - 1) * this.reelSpacing);
-        const firstReelX = this.cameras.main.centerX - (totalReelsWidth / 2) + (this.symbolWidth / 2) - 75; // Seu ajuste horizontal
-        const reelsCenterY = this.cameras.main.centerY - 75; // Seu ajuste vertical final
+        const firstReelX = this.cameras.main.centerX - (totalReelsWidth / 2) + (this.symbolWidth / 2) - 75; // Deslocado 70 pixels para a esquerda
+        const reelsCenterY = this.cameras.main.centerY - 80;
 
         this.reels = [];
-        // this.visibleSymbols = []; // Não vamos mais popular isso diretamente aqui
 
         for (let i = 0; i < this.numReels; i++) {
             const reelX = firstReelX + i * (this.symbolWidth + this.reelSpacing);
-            const reelContainer = this.add.container(reelX, reelsCenterY); // Container ainda centrado
+            const reelContainer = this.add.container(reelX, reelsCenterY);
             this.reels.push(reelContainer);
             console.log(`Container for Reel ${i+1} created at X: ${reelX}`);
 
-            const currentStrip = this.reelSymbolStrips[i]; // Pega a tira para esta coluna
+            const currentStrip = this.reelSymbolStrips[i];
             const stripHeight = currentStrip.length * (this.symbolHeight + this.symbolPaddingY);
 
-            // Adiciona TODOS os símbolos da tira ao container
             for (let k = 0; k < currentStrip.length; k++) {
                 const symbolKey = currentStrip[k];
-                // Calcula a posição Y relativa ao *topo* da tira imaginária
-                // A posição 0 seria o topo do primeiro símbolo
                 const symbolY = k * (this.symbolHeight + this.symbolPaddingY);
 
-                // Adiciona fundo da célula (opcional, pode remover se a máscara bastar)
-                const cellBg = this.add.rectangle(0, symbolY, this.symbolWidth, this.symbolHeight + this.symbolPaddingY, 0x000000, 0.1).setOrigin(0.5); // Alpha menor
+                const cellBg = this.add.rectangle(0, symbolY, this.symbolWidth, this.symbolHeight + this.symbolPaddingY, 0x000000, 0.1).setOrigin(0.5);
                 reelContainer.add(cellBg);
 
-                // Cria e adiciona a imagem do símbolo
                 const symbolImage = this.add.image(0, symbolY, symbolKey).setOrigin(0.5);
                 reelContainer.add(symbolImage);
-
-                // Não precisamos mais guardar visibleSymbols aqui da mesma forma
             }
 
-            // --- AJUSTE INICIAL DA POSIÇÃO Y DO CONTAINER ---
-            // Para começar mostrando os símbolos do "meio" da tira na área visível
-            // Vamos calcular o Y do símbolo do meio da tira e ajustar o container
-            // para que esse Y fique no centro (reelsCenterY, que é a origem Y do container)
             const middleSymbolIndex = Math.floor(currentStrip.length / 2);
             const middleSymbolY = middleSymbolIndex * (this.symbolHeight + this.symbolPaddingY);
-            // Ajusta a posição inicial Y do container. O container em si é movido.
-            // A origem Y do container (reelContainer.y) foi definida como reelsCenterY.
-            // Os símbolos são adicionados com Y relativo a 0 dentro do container.
-            // Para centralizar o símbolo do meio da *tira* no centro da *tela*,
-            // precisamos deslocar o *conteúdo* do container para cima por middleSymbolY.
-            // Como não podemos mover o conteúdo diretamente, ajustamos a origem Y inicial
-            // ou aplicamos uma posição inicial que simule isso.
-            // Uma forma é definir a posição Y inicial do *container* para esconder parte da tira.
-            // Vamos posicionar o *topo* do container (y=0 interno) um pouco acima da área visível.
-            // A área visível começa em roughly reelsCenterY + reelStartYOffset - symbolHeight/2
-            // Ajuste inicial Y do container (pode precisar de ajuste fino)
-            reelContainer.y = reelsCenterY - middleSymbolY; // Tentativa inicial de centralizar o meio da tira
+            reelContainer.y = reelsCenterY - middleSymbolY;
+        }
 
-        } // Fim do loop i
-
-        // --- Código da Máscara (como antes, mas verifique as coordenadas) ---
         console.log('Creating reels mask...');
-        // Recalcular maskWidth/Height/X/Y baseado nas propriedades `this.`
-        const maskWidth = (this.numReels * this.symbolWidth) + ((this.numReels - 1) * this.reelSpacing) - this.reelSpacing; // Ajustado
+        // Ajuste do cálculo da largura da máscara para incluir todo o espaço necessário
+        const maskWidth = totalReelsWidth;
         const maskHeight = this.visibleRows * (this.symbolHeight + this.symbolPaddingY) - this.symbolPaddingY;
         const maskX = firstReelX - this.symbolWidth / 2;
-        // O Y da máscara deve ser o topo da área visível
-        const maskY = reelsCenterY + this.reelStartYOffset - this.symbolHeight / 2; // Topo da linha 0
+        const maskY = reelsCenterY + this.reelStartYOffset - this.symbolHeight / 2;
 
         const maskGraphics = this.make.graphics();
         maskGraphics.fillStyle(0xffffff);
@@ -172,98 +146,114 @@ export default class GameScene extends Phaser.Scene {
         console.log('Finished creating initial reels display with full strips.');
     }
     
-    // SUBSTITUA O MÉTODO checkWins INTEIRO POR ESTE:
-    checkWins(finalStopIndexes, currentBet) { // <<< ACEITA currentBet COMO PARÂMETRO
+    checkWins(finalStopIndexes, currentBet) {
         console.log(`--- GameScene: checkWins() called with Bet: ${currentBet} ---`);
         const wildSymbolKey = 'symbol_wild';
     
-        // 1. Construir a grade visível (como antes, com verificações)
-        let visibleSymbolGrid = [];
-        // ... (código idêntico ao anterior para construir visibleSymbolGrid a partir de finalStopIndexes) ...
+        // 1. Construir a grade visível (keys E objects)
+        let visibleSymbolGridKeys = []; // Guarda as chaves (como antes)
+        let visibleSymbolObjects = []; // Guarda as referências aos GameObjects Image
+    
         for (let i = 0; i < this.numReels; i++) {
-            visibleSymbolGrid[i] = [];
+            visibleSymbolGridKeys[i] = [];
+            visibleSymbolObjects[i] = []; // Inicializa array para objetos desta coluna
             const stopIndex = finalStopIndexes[i];
             const strip = this.reelSymbolStrips[i];
-            if (!strip || stopIndex === undefined || stopIndex < 0 || stopIndex >= strip.length) {
-                 console.error(`Invalid stopIndex (${stopIndex}) or strip for reel ${i} in checkWins`);
-                 visibleSymbolGrid[i] = [null, null, null];
-                 continue;
+            const reelContainer = this.reels[i]; // Pega o container
+    
+            if (!strip || !reelContainer || stopIndex === undefined || stopIndex < 0 || stopIndex >= strip.length) {
+                console.error(`Invalid stopIndex (${stopIndex}), strip, or container for reel ${i} in checkWins`);
+                visibleSymbolGridKeys[i] = [null, null, null];
+                visibleSymbolObjects[i] = [null, null, null];
+                continue;
             }
-            const indexRow0 = (stopIndex - 1 + strip.length) % strip.length;
-            const indexRow1 = stopIndex;
-            const indexRow2 = (stopIndex + 1) % strip.length;
-            visibleSymbolGrid[i][0] = strip[indexRow0];
-            visibleSymbolGrid[i][1] = strip[indexRow1];
-            visibleSymbolGrid[i][2] = strip[indexRow2];
+    
+            for (let j = 0; j < this.visibleRows; j++) {
+                 // Calcula o índice do símbolo na tira completa baseado no stopIndex (meio)
+                const stripIndex = (stopIndex + (j - Math.floor(this.visibleRows / 2)) + strip.length) % strip.length;
+                const symbolKey = strip[stripIndex];
+                visibleSymbolGridKeys[i][j] = symbolKey;
+    
+                // Acha o GameObject Image correspondente no container
+                // Assumindo que adicionamos [cellBg0, symbol0, cellBg1, symbol1, ...]
+                // O índice na lista do container é k * 2 + 1
+                const gameObjectIndex = stripIndex * 2 + 1;
+                if (reelContainer.list && gameObjectIndex < reelContainer.list.length && reelContainer.list[gameObjectIndex] instanceof Phaser.GameObjects.Image) {
+                     visibleSymbolObjects[i][j] = reelContainer.list[gameObjectIndex];
+                } else {
+                     console.error(`Could not find symbol GameObject at stripIndex ${stripIndex} (list index ${gameObjectIndex}) for reel ${i}`);
+                     visibleSymbolObjects[i][j] = null;
+                }
+            }
         }
-        console.log('Visible Grid for Win Check:');
-        // ... (log formatado da grade como antes) ...
+        // Log da grade (como antes)
+        console.log('Visible Grid for Win Check (Keys):');
+        // ... (log formatado de visibleSymbolGridKeys) ...
          for (let r = 0; r < this.visibleRows; r++) {
              let rowStr = "";
              for (let c = 0; c < this.numReels; c++) {
-                 rowStr += (visibleSymbolGrid[c][r] || 'NULL').padEnd(20);
+                 rowStr += (visibleSymbolGridKeys[c][r] || 'NULL').padEnd(20);
              }
              console.log(`[${rowStr}]`);
         }
     
+    
         // 2. Inicializar ganhos
         let totalWin = 0;
         let winningLinesInfo = [];
+        let winningSymbolObjects = new Set(); // Usar Set para evitar duplicatas
     
-        // --- CÁLCULO DA APOSTA POR LINHA ---
-        // Assume que currentBet é a APOSTA TOTAL. Dividimos pelo nº de linhas ativas.
-        // Se PAYLINES estiver vazio, usamos a aposta total como aposta por linha (ou erro).
+        // --- CÁLCULO DA APOSTA POR LINHA (como antes) ---
         const numberOfPaylines = PAYLINES.length > 0 ? PAYLINES.length : 1;
-        const betPerLine = currentBet / numberOfPaylines; // <<< USA O currentBet PASSADO
+        const betPerLine = currentBet / numberOfPaylines;
         console.log(`Bet per line used for calculation: ${betPerLine.toFixed(2)} (Total Bet: ${currentBet})`);
-        // --- FIM CÁLCULO APOSTA ---
     
-        // 3. Iterar sobre cada PAYLINE (lógica como antes)
+        // 3. Iterar sobre cada PAYLINE
         for (let lineIndex = 0; lineIndex < PAYLINES.length; lineIndex++) {
-            // ... (lógica como antes para pegar lineSymbols, paySymbol, matchCount incluindo Wilds) ...
             const currentPayline = PAYLINES[lineIndex];
-            let lineSymbols = [];
+            let lineSymbolsKeys = []; // Chaves dos símbolos na linha
+            let lineSymbolsObjs = []; // Objetos dos símbolos na linha
+    
+            // Coleta símbolos (keys e objects) da payline
             for (let reelIndex = 0; reelIndex < this.numReels; reelIndex++) {
-                 if(reelIndex < currentPayline.length){
-                     const rowIndex = currentPayline[reelIndex];
-                     lineSymbols.push(visibleSymbolGrid[reelIndex][rowIndex]);
-                 } else { lineSymbols.push(null); }
-            }
-            let firstSymbol = lineSymbols[0];
-            if (firstSymbol === null) continue;
-            let paySymbol = firstSymbol;
-            let matchCount = 0;
-            if (firstSymbol === wildSymbolKey) {
-                matchCount = 1;
-                for (let k = 1; k < this.numReels; k++) {
-                     if(lineSymbols[k] === null) break;
-                     if (lineSymbols[k] !== wildSymbolKey) { paySymbol = lineSymbols[k]; break; }
-                     matchCount++;
+                if(reelIndex < currentPayline.length){
+                    const rowIndex = currentPayline[reelIndex];
+                    lineSymbolsKeys.push(visibleSymbolGridKeys[reelIndex][rowIndex]);
+                    lineSymbolsObjs.push(visibleSymbolObjects[reelIndex][rowIndex]); // Guarda o objeto
+                } else {
+                     lineSymbolsKeys.push(null);
+                     lineSymbolsObjs.push(null);
                 }
-                 if (matchCount === this.numReels) paySymbol = wildSymbolKey;
-            } else { paySymbol = firstSymbol; }
-            if (!PAYTABLE[paySymbol]) { continue; }
-            matchCount = 0;
-            for (let i = 0; i < this.numReels; i++) {
-                 if (lineSymbols[i] === null) break;
-                 if (lineSymbols[i] === paySymbol || lineSymbols[i] === wildSymbolKey) { matchCount++; }
-                 else { break; }
             }
     
+            // 4. Verifica combinações L-to-R (como antes, usando lineSymbolsKeys)
+            // ... (lógica idêntica para achar firstSymbol, paySymbol, matchCount) ...
+             let firstSymbol = lineSymbolsKeys[0];
+             if (firstSymbol === null) continue;
+             let paySymbol = firstSymbol;
+             let matchCount = 0;
+             if (firstSymbol === wildSymbolKey) { /* ... lógica wild ... */ matchCount=1;for(let k=1;k<this.numReels;k++){if(lineSymbolsKeys[k]===null)break;if(lineSymbolsKeys[k]!==wildSymbolKey){paySymbol=lineSymbolsKeys[k];break;}matchCount++;}if(matchCount===this.numReels)paySymbol=wildSymbolKey;}else{paySymbol=firstSymbol;}
+             if (!PAYTABLE[paySymbol]){continue;}
+             matchCount = 0;
+             for (let i = 0; i < this.numReels; i++){if(lineSymbolsKeys[i]===null)break;if(lineSymbolsKeys[i]===paySymbol||lineSymbolsKeys[i]===wildSymbolKey){matchCount++;}else{break;}}
     
-            // 5. Calcula o ganho se houver 3 ou mais, USANDO betPerLine
+            // 5. Calcula ganho e ADICIONA OBJETOS VENCEDORES ao Set
             if (matchCount >= 3) {
                 const payoutIndex = matchCount - 3;
-                const payoutMultiplier = (PAYTABLE[paySymbol] && PAYTABLE[paySymbol].length > payoutIndex)
-                                         ? PAYTABLE[paySymbol][payoutIndex]
-                                         : 0;
+                const payoutMultiplier = (PAYTABLE[paySymbol] && PAYTABLE[paySymbol].length > payoutIndex) ? PAYTABLE[paySymbol][payoutIndex] : 0;
                 if (payoutMultiplier > 0) {
-                    // --- USA betPerLine REAL ---
                     const lineWin = payoutMultiplier * betPerLine;
-                    // --- FIM ---
                     totalWin += lineWin;
-                    console.log(`%cWIN!%c Payline ${lineIndex + 1} ([${currentPayline.join(',')}]), Symbol: ${paySymbol}, Count: ${matchCount}, Payout: ${lineWin.toFixed(2)} (Multiplier: ${payoutMultiplier})`, 'color: green; font-weight: bold;', 'color: inherit;');
-                    winningLinesInfo.push({ line: lineIndex + 1, symbol: paySymbol, count: matchCount, amount: lineWin });
+                    console.log(`%cWIN!%c Payline ${lineIndex + 1} ... Payout: ${lineWin.toFixed(2)} ...`, 'color: green; font-weight: bold;', 'color: inherit;');
+                    let currentWinningObjects = [];
+                    // Adiciona os objetos dos símbolos que fizeram parte da vitória ao Set
+                    for (let k = 0; k < matchCount; k++) {
+                         if(lineSymbolsObjs[k]) { // Verifica se o objeto existe
+                             winningSymbolObjects.add(lineSymbolsObjs[k]);
+                             currentWinningObjects.push(lineSymbolsObjs[k]); // Guarda objs desta linha para info
+                         }
+                    }
+                    winningLinesInfo.push({ line: lineIndex + 1, symbol: paySymbol, count: matchCount, amount: lineWin, objects: currentWinningObjects });
                 }
             }
         } // Fim do loop de Paylines
@@ -275,25 +265,91 @@ export default class GameScene extends Phaser.Scene {
     
         // --- Adicionar Ganhos ao Saldo ---
         if (totalWin > 0) {
-            let currentBalance = this.registry.get('balance') || 0; // Pega do registry
+            // Obter o saldo atual do registry
+            let currentBalance = this.registry.get('balance') || 0;
+            // Adicionar o ganho ao saldo
             currentBalance += totalWin;
-            this.registry.set('balance', currentBalance); // Atualiza registry
-            console.log(`Win amount ${totalWin.toFixed(2)} added. New balance (local): ${currentBalance.toFixed(2)}`);
-            // Salva o novo saldo no DB via IPC
+            // Atualizar o registry
+            this.registry.set('balance', currentBalance);
+            
+            // Atualizar o banco de dados via IPC
             if (window.electronAPI?.updateProfile) {
                 window.electronAPI.updateProfile({ balance: currentBalance })
-                    .then(success => console.log('GameScene: Balance update (after win) sent to DB:', success))
-                    .catch(err => console.error('GameScene: Error sending balance update (after win):', err));
+                    .then(success => console.log('Balance updated in DB after win:', success))
+                    .catch(err => console.error('Error updating balance after win:', err));
             }
-            // Emite evento para UI atualizar o saldo APÓS adicionar ganho
+            
+            // Emitir eventos para atualizar UI
             this.events.emit('balanceUpdated', currentBalance);
+            this.events.emit('winAnnounced', totalWin);
+
+            // Destacar os símbolos vencedores
+            this.highlightWins(Array.from(winningSymbolObjects));
         }
-        // --- Fim Adicionar Ganhos ---
     
-    
-        return totalWin; // Retorna o valor numérico do ganho
+        // Retorna um objeto com o total e os objetos vencedores únicos
+        return { totalWin, winningObjects: Array.from(winningSymbolObjects) }; // Converte Set para Array
     }
-    // --- FIM DO MÉTODO checkWins ---
+
+    // Aplica o efeito de destaque
+    highlightWins(winningObjects) {
+        console.log("Highlighting winning symbols:", winningObjects);
+        const dimAlpha = 0.5; // Alpha para símbolos não vencedores
+        const highlightAlpha = 1.0; // Alpha para vencedores
+
+        // 1. Diminui o alpha de TODOS os símbolos primeiro
+        for (let i = 0; i < this.numReels; i++) {
+            if (this.reels[i]) {
+                for (let k = 1; k < this.reels[i].list.length; k += 2) {
+                    const symbol = this.reels[i].list[k];
+                    if (symbol instanceof Phaser.GameObjects.Image) {
+                        symbol.setAlpha(dimAlpha);
+                    }
+                }
+            }
+        }
+
+        // 2. Aplica o efeito de blink nos símbolos vencedores
+        for (const winner of winningObjects) {
+            if (winner) {
+                winner.setAlpha(highlightAlpha);
+                
+                // Cria o efeito de blink usando tween
+                this.tweens.add({
+                    targets: winner,
+                    alpha: { from: highlightAlpha, to: 0.3 },
+                    duration: 200,
+                    yoyo: true,
+                    repeat: 5, // Número de vezes que vai piscar
+                    ease: 'Sine.easeInOut'
+                });
+            }
+        }
+
+        // 3. Agenda a limpeza dos highlights após um tempo
+        if (this.highlightTimer) { this.highlightTimer.remove(); }
+        this.highlightTimer = this.time.delayedCall(2500, this.clearHighlights, [], this);
+    }
+
+    // Remove todos os efeitos de destaque
+    clearHighlights() {
+        console.log("Clearing highlights");
+        if(this.highlightTimer) { this.highlightTimer.remove(); this.highlightTimer = null; } // Limpa timer
+
+        for (let i = 0; i < this.numReels; i++) {
+            if (this.reels[i]) {
+                // Itera pelos filhos do container. Ímpares são os símbolos
+                for (let k = 1; k < this.reels[i].list.length; k += 2) {
+                    const symbol = this.reels[i].list[k];
+                    if (symbol instanceof Phaser.GameObjects.Image) {
+                        symbol.setAlpha(1.0); // Restaura alpha normal
+                        // symbol.clearTint(); // Limpa tint se usou
+                    }
+                }
+            }
+        }
+    }
+    // --- Fim dos Novos Métodos ---
 
     // --- MÉTODO ATUALIZADO ---
     startSpin() {
@@ -305,6 +361,10 @@ export default class GameScene extends Phaser.Scene {
         console.log('%c--- GameScene: startSpin() called! ---', "color: blue; font-weight: bold;");
         this.isSpinning = true; // <<< Define a flag como true
         console.log(`%cSpin Start: Flag set to ${this.isSpinning}`, "color: blue;");
+
+        // --- ADICIONADO: Limpar highlights do giro anterior ---
+        this.clearHighlights();
+        // --- FIM ADIÇÃO ---
     
         // --- Desabilitar o Botão na UI ---
         const uiScene = this.scene.get('UIScene');
@@ -315,8 +375,8 @@ export default class GameScene extends Phaser.Scene {
         }
     
         // --- Ler Aposta e Saldo do Registry ---
-        let currentBet = this.registry.get('currentBet');
-        let balance = this.registry.get('balance');
+        let currentBet = this.registry.get('currentBet') ?? 1;
+        let balance = this.registry.get('balance') ?? 0;
     
         // Usa valores padrão se não encontrados no registry (importante na primeira vez)
         if (currentBet === undefined) { currentBet = this.minBet || 1; }
